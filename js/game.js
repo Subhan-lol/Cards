@@ -18,7 +18,7 @@
 
   /* ---------- save data ---------- */
   const SAVE_KEY = 'raildash-save-v1';
-  const save = { coins: 0, best: 0, boards: 3, runs: 0, muted: false, up: { magnet: 0, multiplier: 0, sneakers: 0, jetpack: 0 } };
+  const save = { coins: 0, best: 0, boards: 3, runs: 0, muted: false, character: 'friend', up: { magnet: 0, multiplier: 0, sneakers: 0, jetpack: 0 } };
   try {
     const raw = localStorage.getItem(SAVE_KEY);
     if (raw) {
@@ -83,7 +83,9 @@
   }
 
   W.init(scene);
-  const P = new RD.Player(scene);
+  const CHARACTERS = Object.keys(RD.models.RUNNERS);
+  if (!RD.models.RUNNERS[save.character]) save.character = 'friend';
+  const P = new RD.Player(scene, save.character);
 
   const chaser = RD.models.makeChaser();
   chaser.root.scale.setScalar(0.78);
@@ -173,6 +175,15 @@
     $('bankVal').textContent = save.coins;
     $('boardsVal').textContent = save.boards;
     $('soundBtn').textContent = save.muted ? 'SOUND: OFF' : 'SOUND: ON';
+    $('charName').textContent = RD.models.RUNNERS[save.character].label;
+  }
+
+  function cycleCharacter(dir) {
+    const i = CHARACTERS.indexOf(save.character);
+    save.character = CHARACTERS[(i + dir + CHARACTERS.length) % CHARACTERS.length];
+    persist();
+    P.setStyle(save.character);
+    refreshMenu();
   }
 
   function buildShop() {
@@ -571,6 +582,11 @@
       if (k === 'Escape' || k === 'p' || k === 'P' || k === 'Enter' || k === ' ') resume();
     } else if (G.state === 'menu' && !$('menu').classList.contains('hidden')) {
       if (k === 'Enter' || k === ' ') startRun(false);
+      else if (KEYS[k] === 'left' || KEYS[k] === 'right') {
+        A.init();
+        A.click();
+        cycleCharacter(KEYS[k] === 'left' ? -1 : 1);
+      }
     } else if (G.state === 'over') {
       if (k === 'Enter' || k === ' ') startRun(true);
     }
@@ -640,6 +656,8 @@
     showScreen(G.state === 'over' ? 'over' : 'menu');
   });
   onClick('soundBtn', toggleSound);
+  onClick('charPrev', () => cycleCharacter(-1));
+  onClick('charNext', () => cycleCharacter(1));
   onClick('muteBtn', toggleSound);
   onClick('pauseBtn', pause);
   onClick('resumeBtn', resume);
@@ -692,5 +710,5 @@
   $('loading').classList.add('hidden');
 
   // handy for debugging from the browser console
-  RD.game = { G, P, W, save, startRun, act, toMenu, collectPower, useBoard, frameUpdate, renderer, pause, buildShop, showScreen };
+  RD.game = { G, P, W, save, startRun, act, toMenu, collectPower, useBoard, frameUpdate, renderer, scene, camera, pause, buildShop, showScreen };
 })();

@@ -18,12 +18,23 @@
   ];
 
   class Player {
-    constructor(scene) {
-      this.rig = RD.models.makeRunner();
-      scene.add(this.rig.root);
-      scene.add(this.rig.blob);
+    constructor(scene, style) {
+      this.scene = scene;
       this.cur = {};
+      this.setStyle(style);
       this.reset();
+    }
+
+    // swap the character model; state and animation carry over
+    setStyle(style) {
+      if (this.rig) {
+        this.scene.remove(this.rig.root);
+        this.scene.remove(this.rig.blob);
+      }
+      this.style = style;
+      this.rig = RD.models.makeRunner(style);
+      this.scene.add(this.rig.root);
+      this.scene.add(this.rig.blob);
     }
 
     reset() {

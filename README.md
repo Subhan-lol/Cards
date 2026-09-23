@@ -18,6 +18,10 @@ No install, no server, no internet needed. With internet access the game loads a
 
 Repository **Settings → Pages → Build and deployment → Deploy from a branch**, choose your branch and `/ (root)`, then open the link GitHub gives you (for example `https://<your-user>.github.io/<repo>/`).
 
+## Runners
+
+Pick your runner on the menu with the ◀ ▶ buttons (or the arrow keys): **Friend**, whose real face comes from a photo, or **Kai**, the street artist. Your choice is saved.
+
 ## Controls
 
 | Action              | Keyboard                | Touch            |
@@ -49,7 +53,8 @@ Repository **Settings → Pages → Build and deployment → Deploy from a branc
 index.html            page, menus and HUD
 css/style.css         UI styling
 js/textures.js        procedural canvas textures (graffiti, trains, buildings, icons)
-js/models.js          3D models: runner, patrol bot, trains, barriers, scenery
+js/models.js          3D models: runners, patrol bot, trains, barriers, scenery
+js/friend-face.js     the Friend runner's face (photo, embedded as a data URL)
 js/world.js           track, scenery streaming, level generator, coins, particles
 js/player.js          movement, physics, collisions and animation
 js/audio.js           synthesized sound effects and background music

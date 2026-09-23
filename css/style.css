@@ -374,6 +374,34 @@ kbd {
   max-width: 380px;
   text-shadow: 0 2px 0 var(--ink);
 }
+.char-pick {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.char-pick > div {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  min-width: 130px;
+  padding: 6px 12px;
+  border-radius: 14px;
+  background: rgba(27, 21, 48, 0.6);
+  border: 2px solid rgba(255, 255, 255, 0.25);
+}
+.char-pick small {
+  font-size: 12px;
+  opacity: 0.8;
+  letter-spacing: 1px;
+}
+.char-pick b {
+  font-size: 24px;
+  font-weight: normal;
+}
+.btn.arrow {
+  padding: 8px 14px;
+  font-size: 18px;
+}
 .row {
   display: flex;
   gap: 12px;
@@ -586,6 +614,7 @@ kbd {
     display: none;
   }
   .screen.side .row,
+  .screen.side .char-pick,
   .screen.side .stats {
     justify-content: center;
   }

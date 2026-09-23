@@ -125,110 +125,207 @@
   }
 
   /* ======================================================================
-   * The runner: Kai, a street artist in an orange hoodie with a
-   * green backpack, purple spiky hair and cyan headphones.
+   * Runners. Every look shares the same skeleton so animation is identical.
+   *  - kai:    street artist, orange hoodie, backpack, purple spiky hair
+   *  - friend: your friend - his real face from a photo, messy black
+   *            hair, black tee and jeans
    * ==================================================================== */
-  M.makeRunner = function () {
-    const col = {
-      skin: '#e3a574', hair: '#3d2a6b', hoodie: '#ff7b1c', hoodieDark: '#e0620c', jeans: '#2f5597',
-      jeansDark: '#264780', shoe: '#ffffff', shoeAccent: '#ff3b5c', pack: '#22b573', band: '#20d0f0',
-    };
+  M.RUNNERS = {
+    kai: {
+      label: 'KAI', skin: '#e3a574', skinDark: '#d18d5c', hair: '#3d2a6b', hairHi: '#4b3580',
+      top: '#ff7b1c', topDark: '#e0620c', pants: '#2f5597', pantsDark: '#264780',
+      shoe: '#ffffff', shoeAccent: '#ff3b5c', outfit: 'hoodie', hairStyle: 'spiky', face: 'smile',
+      backpack: true, headphones: true, headband: '#20d0f0',
+    },
+    friend: {
+      label: 'FRIEND', skin: '#b97855', skinDark: '#a5664a', hair: '#161217', hairHi: '#2a2230',
+      top: '#2b2c34', topDark: '#1c1d23', pants: '#3b4a66', pantsDark: '#2f3b52',
+      shoe: '#f2f2f2', shoeAccent: '#3a3b44', outfit: 'tee', hairStyle: 'messy', face: 'photo',
+      headScale: [0.95, 1.12, 0.97],
+    },
+  };
+
+  M.makeRunner = function (styleId) {
+    const col = M.RUNNERS[styleId] || M.RUNNERS.kai;
     const root = new THREE.Group();
     const body = new THREE.Group();
     body.position.y = C.HIP_Y;
     root.add(body);
 
-    const pelvis = outline(mesh(new THREE.CapsuleGeometry(0.2, 0.06, 4, 12), toon(col.jeans), 0, 0.02, 0), 0.06);
+    const pelvis = outline(mesh(new THREE.CapsuleGeometry(0.2, 0.06, 4, 12), toon(col.pants), 0, 0.02, 0), 0.06);
     pelvis.scale.set(1.12, 1, 0.82);
     body.add(pelvis);
 
     const torso = new THREE.Group();
     torso.position.y = 0.08;
     body.add(torso);
-    const chest = outline(mesh(new THREE.CapsuleGeometry(0.24, 0.24, 6, 14), toon(col.hoodie), 0, 0.3, 0), 0.06);
+    const chest = outline(mesh(new THREE.CapsuleGeometry(0.24, 0.24, 6, 14), toon(col.top), 0, 0.3, 0), 0.06);
     chest.scale.set(1.12, 1, 0.84);
     torso.add(chest);
-    torso.add(mesh(new THREE.BoxGeometry(0.34, 0.12, 0.05), toon(col.hoodieDark), 0, 0.15, -0.2));
-    torso.add(mesh(new THREE.BoxGeometry(0.03, 0.34, 0.03), toon('#ffffff'), 0, 0.36, -0.215));
-    const hood = mesh(new THREE.SphereGeometry(0.2, 14, 10), toon(col.hoodieDark), 0, 0.55, 0.13);
-    hood.scale.set(1.15, 0.62, 0.8);
-    torso.add(hood);
+    if (col.outfit === 'hoodie') {
+      torso.add(mesh(new THREE.BoxGeometry(0.34, 0.12, 0.05), toon(col.topDark), 0, 0.15, -0.2));
+      torso.add(mesh(new THREE.BoxGeometry(0.03, 0.34, 0.03), toon('#ffffff'), 0, 0.36, -0.215));
+      const hood = mesh(new THREE.SphereGeometry(0.2, 14, 10), toon(col.topDark), 0, 0.55, 0.13);
+      hood.scale.set(1.15, 0.62, 0.8);
+      torso.add(hood);
+    } else {
+      // t-shirt: crew collar and a hem band
+      const collar = mesh(new THREE.TorusGeometry(0.105, 0.028, 8, 20), toon(col.topDark), 0, 0.575, 0.01);
+      collar.rotation.x = Math.PI / 2;
+      torso.add(collar);
+      const hem = mesh(new THREE.CylinderGeometry(0.272, 0.268, 0.05, 20), toon(col.topDark), 0, 0.02, 0);
+      hem.scale.set(1, 1, 0.84);
+      torso.add(hem);
+    }
 
     // backpack with a spray can
     const pack = new THREE.Group();
     pack.position.set(0, 0.33, 0.25);
-    torso.add(pack);
-    pack.add(outline(mesh(new THREE.BoxGeometry(0.4, 0.44, 0.2), toon(col.pack)), 0.05));
-    pack.add(mesh(new THREE.BoxGeometry(0.3, 0.16, 0.06), toon('#1a8a57'), 0, -0.1, 0.11));
-    pack.add(mesh(new THREE.BoxGeometry(0.42, 0.05, 0.22), toon('#ffd23f'), 0, 0.13, 0));
-    pack.add(mesh(new THREE.CylinderGeometry(0.055, 0.055, 0.22, 10), toon('#ff3b5c'), 0.25, 0.02, 0));
-    pack.add(mesh(new THREE.CylinderGeometry(0.035, 0.045, 0.05, 8), toon('#ffffff'), 0.25, 0.15, 0));
-    for (const s of [-1, 1]) torso.add(mesh(new THREE.BoxGeometry(0.06, 0.4, 0.05), toon('#1a8a57'), s * 0.14, 0.34, -0.2));
+    if (col.backpack) {
+      torso.add(pack);
+      pack.add(outline(mesh(new THREE.BoxGeometry(0.4, 0.44, 0.2), toon('#22b573')), 0.05));
+      pack.add(mesh(new THREE.BoxGeometry(0.3, 0.16, 0.06), toon('#1a8a57'), 0, -0.1, 0.11));
+      pack.add(mesh(new THREE.BoxGeometry(0.42, 0.05, 0.22), toon('#ffd23f'), 0, 0.13, 0));
+      pack.add(mesh(new THREE.CylinderGeometry(0.055, 0.055, 0.22, 10), toon('#ff3b5c'), 0.25, 0.02, 0));
+      pack.add(mesh(new THREE.CylinderGeometry(0.035, 0.045, 0.05, 8), toon('#ffffff'), 0.25, 0.15, 0));
+      for (const s of [-1, 1]) torso.add(mesh(new THREE.BoxGeometry(0.06, 0.4, 0.05), toon('#1a8a57'), s * 0.14, 0.34, -0.2));
+    }
 
     // neck & head
     const neck = new THREE.Group();
     neck.position.y = 0.6;
     torso.add(neck);
     neck.add(mesh(new THREE.CylinderGeometry(0.08, 0.09, 0.14, 8), toon(col.skin), 0, 0.02, 0));
-    const phones = mesh(new THREE.TorusGeometry(0.16, 0.035, 8, 20), toon(col.band), 0, -0.02, 0.02);
-    phones.rotation.x = Math.PI / 2 + 0.25;
-    neck.add(phones);
-    for (const s of [-1, 1]) {
-      const cup = mesh(new THREE.CylinderGeometry(0.075, 0.075, 0.07, 12), toon('#1b1b2f'), s * 0.16, -0.02, -0.03);
-      cup.rotation.z = Math.PI / 2;
-      neck.add(cup);
+    if (col.headphones) {
+      const phones = mesh(new THREE.TorusGeometry(0.16, 0.035, 8, 20), toon('#20d0f0'), 0, -0.02, 0.02);
+      phones.rotation.x = Math.PI / 2 + 0.25;
+      neck.add(phones);
+      for (const s of [-1, 1]) {
+        const cup = mesh(new THREE.CylinderGeometry(0.075, 0.075, 0.07, 12), toon('#1b1b2f'), s * 0.16, -0.02, -0.03);
+        cup.rotation.z = Math.PI / 2;
+        neck.add(cup);
+      }
     }
 
     const head = new THREE.Group();
     head.position.y = 0.27;
+    if (col.headScale) head.scale.set(...col.headScale);
     neck.add(head);
     const skull = outline(mesh(new THREE.SphereGeometry(0.26, 22, 16), toon(col.skin)), 0.05);
     head.add(skull);
-    for (const s of [-1, 1]) {
-      head.add(mesh(new THREE.SphereGeometry(0.06, 10, 8), toon(col.skin), s * 0.255, -0.01, 0));
-      const eye = mesh(new THREE.SphereGeometry(0.066, 12, 10), basic('#ffffff'), s * 0.095, 0.02, -0.215);
-      eye.scale.set(1, 1.28, 0.6);
-      head.add(eye);
-      head.add(mesh(new THREE.SphereGeometry(0.036, 10, 8), basic('#1b1030'), s * 0.093, 0.012, -0.252));
-      head.add(mesh(new THREE.SphereGeometry(0.012, 6, 6), basic('#ffffff'), s * 0.093 + 0.012, 0.03, -0.285));
-      const brow = mesh(new THREE.BoxGeometry(0.1, 0.028, 0.03), toon(col.hair), s * 0.1, 0.125, -0.225);
-      brow.rotation.z = s * -0.18;
-      head.add(brow);
+    for (const s of [-1, 1]) head.add(mesh(new THREE.SphereGeometry(0.06, 10, 8), toon(col.skin), s * 0.255, -0.01, 0));
+    if (col.face === 'smile') {
+      for (const s of [-1, 1]) {
+        const eye = mesh(new THREE.SphereGeometry(0.066, 12, 10), basic('#ffffff'), s * 0.095, 0.02, -0.215);
+        eye.scale.set(1, 1.28, 0.6);
+        head.add(eye);
+        head.add(mesh(new THREE.SphereGeometry(0.036, 10, 8), basic('#1b1030'), s * 0.093, 0.012, -0.252));
+        head.add(mesh(new THREE.SphereGeometry(0.012, 6, 6), basic('#ffffff'), s * 0.093 + 0.012, 0.03, -0.285));
+        const brow = mesh(new THREE.BoxGeometry(0.1, 0.028, 0.03), toon(col.hair), s * 0.1, 0.125, -0.225);
+        brow.rotation.z = s * -0.18;
+        head.add(brow);
+      }
+      head.add(mesh(new THREE.SphereGeometry(0.036, 8, 8), toon(col.skinDark), 0, -0.03, -0.26));
+      const smile = mesh(new THREE.TorusGeometry(0.055, 0.013, 6, 12, Math.PI), basic('#5a1d1d'), 0, -0.085, -0.235);
+      smile.rotation.z = Math.PI;
+      head.add(smile);
+    } else if (col.face === 'photo' && RD.FRIEND_FACE) {
+      // the photo is projected straight on from the front, so it looks right
+      // face-on and wraps naturally around the cheeks
+      const R = 0.263, hw = 0.255, y1 = 0.21, y0 = -0.26;
+      const t0 = Math.acos(y1 / R), t1 = Math.acos(y0 / R);
+      const geo = new THREE.SphereGeometry(R, 36, 28, Math.PI * 1.5 - 1.5, 3.0, t0, t1 - t0);
+      const pos = geo.attributes.position, uv = geo.attributes.uv;
+      for (let i = 0; i < pos.count; i++) uv.setXY(i, 0.5 - pos.getX(i) / (2 * hw), (pos.getY(i) - y0) / (y1 - y0));
+      if (!M._faceTex) {
+        M._faceTex = new THREE.TextureLoader().load(RD.FRIEND_FACE);
+        M._faceTex.anisotropy = 8;
+      }
+      // a little self-lighting keeps the photo as bright as the toon-shaded skin
+      const mat = new THREE.MeshLambertMaterial({ map: M._faceTex, emissive: 0x555555, emissiveMap: M._faceTex, transparent: true });
+      head.add(new THREE.Mesh(geo, mat));
     }
-    head.add(mesh(new THREE.SphereGeometry(0.036, 8, 8), toon('#d18d5c'), 0, -0.03, -0.26));
-    const smile = mesh(new THREE.TorusGeometry(0.055, 0.013, 6, 12, Math.PI), basic('#5a1d1d'), 0, -0.085, -0.235);
-    smile.rotation.z = Math.PI;
-    head.add(smile);
-    // hair: cap + spikes swept back
-    const cap = mesh(new THREE.SphereGeometry(0.28, 18, 12, 0, Math.PI * 2, 0, Math.PI * 0.52), toon(col.hair), 0, 0.02, 0.025);
-    cap.rotation.x = -0.35;
-    head.add(outline(cap, 0.04));
-    const spikes = [
-      [0, 0.26, -0.08, -0.5, 0], [0.13, 0.22, -0.02, -0.7, -0.5], [-0.13, 0.22, -0.02, -0.7, 0.5],
-      [0, 0.24, 0.1, -1.2, 0], [0.16, 0.15, 0.12, -1.5, -0.6], [-0.16, 0.15, 0.12, -1.5, 0.6],
-      [0, 0.12, 0.22, -2.0, 0], [0.09, 0.28, 0.02, -0.9, -0.2], [-0.09, 0.28, 0.02, -0.9, 0.2],
-    ];
-    for (const [x, y, z, rx, rz] of spikes) {
-      const sp = mesh(new THREE.ConeGeometry(0.075, 0.26, 6), toon(col.hair), x, y, z);
-      sp.rotation.set(rx, 0, rz);
-      head.add(sp);
+
+    // hair
+    if (col.hairStyle === 'spiky') {
+      const cap = mesh(new THREE.SphereGeometry(0.28, 18, 12, 0, Math.PI * 2, 0, Math.PI * 0.52), toon(col.hair), 0, 0.02, 0.025);
+      cap.rotation.x = -0.35;
+      head.add(outline(cap, 0.04));
+      const spikes = [
+        [0, 0.26, -0.08, -0.5, 0], [0.13, 0.22, -0.02, -0.7, -0.5], [-0.13, 0.22, -0.02, -0.7, 0.5],
+        [0, 0.24, 0.1, -1.2, 0], [0.16, 0.15, 0.12, -1.5, -0.6], [-0.16, 0.15, 0.12, -1.5, 0.6],
+        [0, 0.12, 0.22, -2.0, 0], [0.09, 0.28, 0.02, -0.9, -0.2], [-0.09, 0.28, 0.02, -0.9, 0.2],
+      ];
+      for (const [x, y, z, rx, rz] of spikes) {
+        const sp = mesh(new THREE.ConeGeometry(0.075, 0.26, 6), toon(col.hair), x, y, z);
+        sp.rotation.set(rx, 0, rz);
+        head.add(sp);
+      }
+    } else {
+      // messy mop: a cap plus lots of soft clumps, and bangs over the forehead
+      let seed = 11;
+      const rand = () => (seed = (seed * 16807) % 2147483647) / 2147483647;
+      const cap = mesh(new THREE.SphereGeometry(0.285, 20, 12, 0, Math.PI * 2, 0, Math.PI * 0.5), toon(col.hair), 0, 0.03, 0.02);
+      cap.rotation.x = col.face === 'photo' ? 0.52 : 0.28;
+      head.add(outline(cap, 0.04));
+      const dir = new THREE.Vector3();
+      for (let ring = 0; ring < 7; ring++) {
+        const theta = 0.12 + ring * 0.26;
+        const count = Math.max(4, Math.round(Math.sin(theta) * 16));
+        for (let k = 0; k < count; k++) {
+          const phi = (k / count) * Math.PI * 2 + rand() * 0.4 + ring * 0.3;
+          dir.set(Math.sin(theta) * Math.cos(phi), Math.cos(theta), Math.sin(theta) * Math.sin(phi));
+          const front = -dir.z;
+          if (theta > 0.5 && front > 0.3) continue; // keep the face clear
+          if (theta > 1.2 && front > -0.35) continue; // only the back reaches the nape
+          const r = 0.082 + rand() * 0.04;
+          const d = 0.245 + rand() * 0.025;
+          const clump = mesh(new THREE.SphereGeometry(r, 9, 7), toon(rand() < 0.3 ? col.hairHi : col.hair), dir.x * d, dir.y * d + 0.02, dir.z * d);
+          clump.scale.set(1, 0.85 + rand() * 0.3, 1);
+          head.add(clump);
+        }
+      }
+      // bangs falling onto the forehead (the photo face already has its own)
+      for (let k = 0; k < (col.face === 'photo' ? 0 : 6); k++) {
+        const x = -0.15 + k * 0.058 + (rand() - 0.5) * 0.02;
+        const y = 0.172 - Math.abs(x) * 0.25;
+        const z = -(Math.sqrt(Math.max(0.001, 0.26 * 0.26 - y * y - x * x)) + 0.018);
+        const bang = mesh(new THREE.CapsuleGeometry(0.036, 0.075 + rand() * 0.04, 4, 8), toon(k % 2 ? col.hairHi : col.hair), x, y, z);
+        bang.rotation.set(0.45, 0, 0.25 + (rand() - 0.5) * 0.5);
+        head.add(bang);
+      }
+      // sideburns
+      for (const s of [-1, 1]) {
+        const sb = mesh(new THREE.BoxGeometry(0.03, 0.1, 0.05), toon(col.hair), s * 0.245, 0.02, -0.07);
+        sb.rotation.z = s * 0.1;
+        head.add(sb);
+      }
     }
-    const band = mesh(new THREE.TorusGeometry(0.262, 0.028, 6, 24), toon(col.band), 0, 0.1, 0);
-    band.rotation.x = Math.PI / 2 - 0.3;
-    head.add(band);
+    if (col.headband) {
+      const band = mesh(new THREE.TorusGeometry(0.262, 0.028, 6, 24), toon(col.headband), 0, 0.1, 0);
+      band.rotation.x = Math.PI / 2 - 0.3;
+      head.add(band);
+    }
 
     // arms
     function arm(side) {
       const shoulder = new THREE.Group();
       shoulder.position.set(side * 0.31, 0.47, 0);
       torso.add(shoulder);
-      shoulder.add(mesh(new THREE.SphereGeometry(0.1, 10, 8), toon(col.hoodie)));
-      shoulder.add(outline(mesh(new THREE.CapsuleGeometry(0.085, 0.16, 4, 8), toon(col.hoodie), 0, -0.15, 0), 0.08));
+      shoulder.add(mesh(new THREE.SphereGeometry(0.1, 10, 8), toon(col.top)));
       const elbow = new THREE.Group();
       elbow.position.y = -0.3;
       shoulder.add(elbow);
-      elbow.add(outline(mesh(new THREE.CapsuleGeometry(0.076, 0.14, 4, 8), toon(col.hoodie), 0, -0.12, 0), 0.08));
-      elbow.add(mesh(new THREE.CylinderGeometry(0.085, 0.085, 0.05, 10), toon(col.hoodieDark), 0, -0.23, 0));
+      if (col.outfit === 'tee') {
+        // short sleeves, bare arms
+        shoulder.add(outline(mesh(new THREE.CapsuleGeometry(0.078, 0.16, 4, 8), toon(col.skin), 0, -0.15, 0), 0.08));
+        shoulder.add(outline(mesh(new THREE.CylinderGeometry(0.104, 0.11, 0.17, 12), toon(col.top), 0, -0.07, 0), 0.05));
+        elbow.add(outline(mesh(new THREE.CapsuleGeometry(0.07, 0.14, 4, 8), toon(col.skin), 0, -0.12, 0), 0.08));
+      } else {
+        shoulder.add(outline(mesh(new THREE.CapsuleGeometry(0.085, 0.16, 4, 8), toon(col.top), 0, -0.15, 0), 0.08));
+        elbow.add(outline(mesh(new THREE.CapsuleGeometry(0.076, 0.14, 4, 8), toon(col.top), 0, -0.12, 0), 0.08));
+        elbow.add(mesh(new THREE.CylinderGeometry(0.085, 0.085, 0.05, 10), toon(col.topDark), 0, -0.23, 0));
+      }
       elbow.add(mesh(new THREE.SphereGeometry(0.083, 10, 8), toon(col.skin), 0, -0.3, 0));
       return { shoulder, elbow };
     }
@@ -237,12 +334,12 @@
       const hip = new THREE.Group();
       hip.position.set(side * 0.12, -0.02, 0);
       body.add(hip);
-      hip.add(outline(mesh(new THREE.CapsuleGeometry(0.105, 0.22, 4, 8), toon(col.jeans), 0, -0.21, 0), 0.07));
+      hip.add(outline(mesh(new THREE.CapsuleGeometry(0.105, 0.22, 4, 8), toon(col.pants), 0, -0.21, 0), 0.07));
       const knee = new THREE.Group();
       knee.position.y = -0.43;
       hip.add(knee);
-      knee.add(outline(mesh(new THREE.CapsuleGeometry(0.092, 0.22, 4, 8), toon(col.jeans), 0, -0.2, 0), 0.07));
-      knee.add(mesh(new THREE.CylinderGeometry(0.1, 0.1, 0.06, 10), toon(col.jeansDark), 0, -0.36, 0));
+      knee.add(outline(mesh(new THREE.CapsuleGeometry(0.092, 0.22, 4, 8), toon(col.pants), 0, -0.2, 0), 0.07));
+      knee.add(mesh(new THREE.CylinderGeometry(0.1, 0.1, 0.06, 10), toon(col.pantsDark), 0, -0.36, 0));
       const ankle = new THREE.Group();
       ankle.position.y = -0.42;
       knee.add(ankle);
