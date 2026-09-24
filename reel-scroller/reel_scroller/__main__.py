@@ -41,7 +41,43 @@ def parse_args(argv=None):
     return p.parse_args(argv)
 
 
+SMART_APP_CONTROL_HELP = """
+Windows Smart App Control blocked a file Reel Scroller needs:
+  {detail}
+
+Smart App Control blocks program files that aren't digitally signed and that
+Microsoft hasn't seen often. The camera and hand-tracking libraries this app
+uses (OpenCV, MediaPipe, NumPy) aren't signed, and Smart App Control has no
+way to allow a single app.
+
+To use Reel Scroller, turn Smart App Control off (search Start for
+"Smart App Control", or go to Settings > Privacy & security > Windows Security
+> App & browser control > Smart App Control settings), then run start.bat again.
+On Windows 11 with updates from April 2026 or later you can turn it back on
+from the same page, but Reel Scroller will be blocked again while it's on.
+"""
+
+
+def _blocked_by_smart_app_control(exc: BaseException) -> bool:
+    # 4551 = ERROR_SYSTEM_INTEGRITY_POLICY_VIOLATION ("An Application Control
+    # policy has blocked this file"). Failed imports only carry the message.
+    if getattr(exc, "winerror", None) == 4551:
+        return True
+    text = str(exc).lower()
+    return "application control" in text or "smart app control" in text
+
+
 def main(argv=None) -> int:
+    try:
+        return _main(argv)
+    except (ImportError, OSError) as exc:
+        if not _blocked_by_smart_app_control(exc):
+            raise
+        print(SMART_APP_CONTROL_HELP.format(detail=exc), file=sys.stderr)
+        return 1
+
+
+def _main(argv=None) -> int:
     args = parse_args(argv)
 
     if args.download_model:

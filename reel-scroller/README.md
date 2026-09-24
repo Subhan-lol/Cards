@@ -14,8 +14,10 @@ Everything runs on your PC. The camera video is never saved or uploaded.
 
 ## Install
 
-1. On GitHub, click **Code → Download ZIP**, extract it, and open the `reel-scroller` folder.
-2. Double-click **`start.bat`**. If Windows shows "Windows protected your PC", click **More info → Run anyway**.
+1. Download the ZIP from GitHub.
+2. **Before extracting it**, right-click the ZIP → **Properties** → tick **Unblock** → **OK**. Otherwise Windows 11 Smart App Control blocks `start.bat` because it came from the internet.
+3. Extract the ZIP and open the `reel-scroller` folder.
+4. Double-click **`start.bat`**. If Windows shows "Windows protected your PC", click **More info → Run anyway**.
 
 That's it. The first time, `start.bat` sets everything up by itself, which takes a few minutes:
 
@@ -93,6 +95,8 @@ Add options after `start.bat` in a terminal (for example `start.bat --invert`). 
 - **"Could not open camera"**: close other apps using the webcam (Zoom, Teams, the Camera app), or try `--camera 1`. Also check that **Settings → Privacy & security → Camera → Let desktop apps access your camera** is on.
 - **The reel doesn't change**: move the mouse pointer over the video. If the site ignores the scroll wheel, try `--mode keys` and click the page once.
 - **Nothing happens in some apps**: Windows blocks simulated input to apps running as administrator.
+- **"Smart App Control blocked an app"** when you open `start.bat`: the file is still marked as downloaded. Delete the extracted folder, unblock the ZIP (right-click → Properties → Unblock), and extract it again. Or right-click `start.bat` and `setup.bat` → Properties → Unblock.
+- **Smart App Control blocks a library when the app starts** (Reel Scroller prints an explanation): Smart App Control blocks unsigned program files that Microsoft hasn't seen often, and OpenCV, MediaPipe and NumPy aren't signed. It has no way to allow a single app, so the only option is to turn it off: search Start for "Smart App Control" → Off. On Windows 11 with updates from April 2026 or later you can turn it back on from the same page, but Reel Scroller will be blocked again while it's on.
 - **Python won't install** (for example, a work PC that blocks installers): install Python 3.12 yourself from [python.org](https://www.python.org/downloads/), tick "Add python.exe to PATH", then run `start.bat` again.
 - **Setup stopped halfway**: run `start.bat` again. It picks up where it left off. To start completely fresh, delete the `.venv` folder first.
 
