@@ -1,0 +1,4 @@
+mediapipe>=0.10.14
+opencv-contrib-python>=4.8
+numpy
+pycaw; sys_platform == "win32"

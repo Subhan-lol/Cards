@@ -41,3 +41,7 @@ Start command:
 ```text
 npm start
 ```
+
+## Also in this repo
+
+[`reel-scroller/`](reel-scroller/) is a separate Windows app that scrolls Instagram Reels, YouTube Shorts and TikTok with hand gestures in front of your webcam (swipe to change reels, twist like a knob for volume). See its README for setup.
