@@ -7,6 +7,7 @@ so the rest of the app can run anywhere in --dry-run mode.
 from __future__ import annotations
 
 import ctypes
+import os
 import sys
 from typing import Optional, Tuple
 
@@ -80,6 +81,12 @@ if IS_WINDOWS:
     _user32.MapVirtualKeyW.restype = ctypes.c_uint
     _user32.GetAsyncKeyState.argtypes = (ctypes.c_int,)
     _user32.GetAsyncKeyState.restype = ctypes.c_short
+    _user32.GetForegroundWindow.restype = ctypes.c_void_p
+    _user32.GetWindowTextW.argtypes = (ctypes.c_void_p, ctypes.c_wchar_p, ctypes.c_int)
+    _user32.GetWindowThreadProcessId.argtypes = (ctypes.c_void_p, ctypes.POINTER(ctypes.c_uint32))
+    _user32.GetWindowThreadProcessId.restype = ctypes.c_uint32
+    _kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
+    _kernel32.GetConsoleWindow.restype = ctypes.c_void_p
     _user32.FindWindowW.argtypes = (ctypes.c_wchar_p, ctypes.c_wchar_p)
     _user32.FindWindowW.restype = ctypes.c_void_p
     _user32.SetWindowPos.argtypes = (
@@ -126,6 +133,23 @@ def scroll_wheel(notches: float) -> None:
 
 def key_down(vk: int) -> bool:
     return IS_WINDOWS and bool(_user32.GetAsyncKeyState(vk) & 0x8000)
+
+
+def foreground_is_own(title: str) -> bool:
+    """True if the focused window is this app's preview or console window."""
+    if not IS_WINDOWS:
+        return False
+    hwnd = _user32.GetForegroundWindow()
+    if not hwnd:
+        return False
+    pid = ctypes.c_uint32()
+    _user32.GetWindowThreadProcessId(hwnd, ctypes.byref(pid))
+    if pid.value == os.getpid() or hwnd == _kernel32.GetConsoleWindow():
+        return True
+    # Windows Terminal hosts the console in its own process; match its title instead.
+    buf = ctypes.create_unicode_buffer(512)
+    _user32.GetWindowTextW(hwnd, buf, len(buf))
+    return title in buf.value
 
 
 def work_area() -> Optional[Tuple[int, int, int, int]]:

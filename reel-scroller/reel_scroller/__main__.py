@@ -20,9 +20,9 @@ def parse_args(argv=None):
     p.add_argument("--camera", type=_camera, default=0,
                    help="webcam index (0, 1, ...) or a phone-camera stream URL (default: 0)")
     p.add_argument("--list-cameras", action="store_true", help="list the webcams that can be opened, then exit")
-    p.add_argument("--mode", choices=("scroll", "keys"), default="scroll",
-                   help="scroll: mouse wheel over the reel (default). keys: Up/Down arrow keys")
-    p.add_argument("--scroll-notches", type=float, default=1.0, help="wheel notches per swipe (default: 1)")
+    p.add_argument("--mode", choices=("keys", "scroll"), default="keys",
+                   help="keys: Down/Up arrow keys in the focused window (default). scroll: mouse wheel")
+    p.add_argument("--scroll-notches", type=float, default=1.0, help="wheel notches per swipe in scroll mode (default: 1)")
     p.add_argument("--invert", action="store_true", help="swipe down for the next reel instead of up")
     p.add_argument("--volume-step", type=int, default=2, help="percent per knob click (default: 2)")
     p.add_argument("--knob-degrees", type=float, default=8.0,
@@ -35,7 +35,7 @@ def parse_args(argv=None):
     p.add_argument("--preview-width", type=int, default=480, help="preview window width in pixels")
     p.add_argument("--no-topmost", action="store_true", help="don't keep the preview on top of other windows")
     p.add_argument("--resolution", default="640x480", help="camera resolution (default: 640x480)")
-    p.add_argument("--dry-run", action="store_true", help="print gestures instead of scrolling or changing volume")
+    p.add_argument("--dry-run", action="store_true", help="print gestures instead of pressing keys or changing volume")
     p.add_argument("--download-model", action="store_true", help="download the hand model, then exit")
     p.add_argument("--version", action="version", version=f"%(prog)s {__version__}")
     return p.parse_args(argv)

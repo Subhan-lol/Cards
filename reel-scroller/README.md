@@ -4,8 +4,8 @@ Scroll Instagram Reels, YouTube Shorts and TikTok on Windows without touching an
 
 | Gesture | Action |
 | --- | --- |
-| Swipe your finger **up** | Next reel |
-| Swipe your finger **down** | Previous reel |
+| Swipe your finger **up** | Next reel (presses the **Down arrow** key) |
+| Swipe your finger **down** | Previous reel (presses the **Up arrow** key) |
 | **Twist** your hand **clockwise**, like turning a volume knob | Volume up |
 | Twist **anticlockwise** | Volume down |
 | Make a **fist** | Pause gestures while you move your hand around |
@@ -31,7 +31,7 @@ After that, it starts in a few seconds.
 ## Use it
 
 1. Double-click **`start.bat`** or the desktop shortcut. A small preview window opens in the bottom-right corner of your screen and stays on top.
-2. Open your reels in the browser (instagram.com/reels, youtube.com/shorts, tiktok.com) and **leave the mouse pointer over the video**.
+2. Open your reels in the browser (instagram.com/reels, youtube.com/shorts, tiktok.com) and **click once on the page**, for example next to the video, so the arrow keys go there. If a swipe happens while the Reel Scroller window has focus, the key isn't sent and the preview says "Click your reels page first".
 3. Sit about an arm's length from the webcam. Raise your hand with your index finger pointing up and your palm facing the camera.
 
 The badge in the preview's top-left corner shows what the app sees:
@@ -71,8 +71,8 @@ Add options after `start.bat` in a terminal (for example `start.bat --invert`). 
 | --- | --- |
 | `--sensitivity 1.3` | Above 1: shorter swipes and smaller twists are enough. Below 1: fewer accidental triggers |
 | `--invert` | Swipe **down** for the next reel instead |
-| `--mode keys` | Press the Down and Up arrow keys instead of scrolling. Click the browser once so it has keyboard focus |
-| `--scroll-notches 2` | Scroll further per swipe, for sites that need more than one wheel notch |
+| `--mode scroll` | Send a mouse-wheel scroll to whatever is under the mouse pointer instead of arrow keys |
+| `--scroll-notches 2` | In scroll mode, scroll further per swipe |
 | `--knob-degrees 5` | Less twisting per volume click (faster volume) |
 | `--volume-step 4` | Percent per volume click (default 2) |
 | `--volume-method exact` | Set the volume directly instead of pressing the volume keys (no Windows popup) |
@@ -81,19 +81,19 @@ Add options after `start.bat` in a terminal (for example `start.bat --invert`). 
 | `--no-preview` | Run without the preview window |
 | `--no-topmost` | Don't keep the preview on top |
 | `--preview-width 360` | Smaller or larger preview |
-| `--dry-run` | Print the gestures without scrolling or changing the volume, for testing |
+| `--dry-run` | Print the gestures without pressing keys or changing the volume, for testing |
 
 ## Tips
 
 - Light your hand from the front. A bright window behind you makes tracking worse.
 - Keep your whole hand in view while you gesture.
 - If swipes are missed, try `--sensitivity 1.3`. If it triggers when you don't want it to, try `--sensitivity 0.8`, or make a fist while you move your hand.
-- In the default scroll mode, the swipe goes to whatever is under the mouse pointer, so keep the pointer on the reel and not on the preview window.
+- The arrow keys go to whichever window is focused. After clicking anything else, click your reels page again before swiping. The volume twist works no matter which window is focused.
 
 ## Troubleshooting
 
 - **"Could not open camera"**: close other apps using the webcam (Zoom, Teams, the Camera app), or try `--camera 1`. Also check that **Settings → Privacy & security → Camera → Let desktop apps access your camera** is on.
-- **The reel doesn't change**: move the mouse pointer over the video. If the site ignores the scroll wheel, try `--mode keys` and click the page once.
+- **The reel doesn't change**: click once on the reels page so it has keyboard focus, then swipe again. Check the black console window: if it says `Swipe up -> next reel`, the swipe was detected and the Down arrow key was sent.
 - **Nothing happens in some apps**: Windows blocks simulated input to apps running as administrator.
 - **"Smart App Control blocked an app"** when you open `start.bat`: the file is still marked as downloaded. Delete the extracted folder, unblock the ZIP (right-click → Properties → Unblock), and extract it again. Or right-click `start.bat` and `setup.bat` → Properties → Unblock.
 - **Smart App Control blocks a library when the app starts** (Reel Scroller prints an explanation): Smart App Control blocks unsigned program files that Microsoft hasn't seen often, and OpenCV, MediaPipe and NumPy aren't signed. It has no way to allow a single app, so the only option is to turn it off: search Start for "Smart App Control" → Off. On Windows 11 with updates from April 2026 or later you can turn it back on from the same page, but Reel Scroller will be blocked again while it's on.
@@ -105,7 +105,7 @@ Add options after `start.bat` in a terminal (for example `start.bat --invert`). 
 - [MediaPipe Hand Landmarker](https://ai.google.dev/edge/mediapipe/solutions/vision/hand_landmarker) finds 21 points on your hand in every frame, on the CPU.
 - **Swipes** (`reel_scroller/gestures.py`): the fingertip has to travel about one palm length vertically within 0.35 seconds, mostly straight up or down, without the hand turning. Distances are measured in palm lengths, so the gesture feels the same close to the camera or far from it. The finger has to pause before a swipe, and the swipe fires when it stops.
 - **Knob**: the app measures how much the palm (wrist and four knuckles) has rotated with a best-fit rotation. Bending your finger doesn't count as turning, only rotating your hand does.
-- **Reels** change through a mouse-wheel notch or an arrow key sent with the Windows `SendInput` API. **Volume** changes through the media volume keys, or through the Core Audio API with `--volume-method exact`.
+- **Reels** change through the Down/Up arrow key (or a mouse-wheel notch with `--mode scroll`), sent with the Windows `SendInput` API. **Volume** changes through the media volume keys, or through the Core Audio API with `--volume-method exact`.
 
 Run the tests (no webcam needed) from this folder:
 

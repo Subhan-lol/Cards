@@ -81,12 +81,16 @@ class Hud:
         self.knob_step_deg = knob_step_deg
         self._swipe_flash: Optional[Tuple[Event, float]] = None
         self._volume_flash: Optional[Tuple[int, float]] = None
+        self._warning: Optional[Tuple[str, float]] = None
 
     def on_event(self, event: Event, t: float) -> None:
         if event in (Event.SWIPE_UP, Event.SWIPE_DOWN):
             self._swipe_flash = (event, t)
         else:
             self._volume_flash = (1 if event is Event.VOLUME_UP else -1, t)
+
+    def warn(self, text: str, t: float) -> None:
+        self._warning = (text, t)
 
     def render(
         self,
@@ -123,6 +127,7 @@ class Hud:
             _text_center(img, "point a finger up, palm facing you", (W // 2, H // 2 + 13), 0.4, MUTED, font=SMALL)
 
         self._draw_swipe_flash(img, now)
+        self._draw_warning(img, now)
         self._draw_volume_meter(img, volume, now)
         self._draw_status(img, STATE_LABELS[state], color)
         self._draw_hints(img)
@@ -219,6 +224,19 @@ class Hud:
             _text_center(o, "NEXT" if forward else "BACK", (cx, cy + 48), 0.7, WHITE, 2)
 
         _blend(img, max(0.0, alpha), draw)
+
+    def _draw_warning(self, img, now: float) -> None:
+        if self._warning is None:
+            return
+        text, t = self._warning
+        if now - t > 3.0:
+            self._warning = None
+            return
+        H, W = img.shape[:2]
+        (tw, th), _ = cv2.getTextSize(text, FONT, 0.55, 1)
+        x1, y1 = (W - tw) // 2 - 16, 52
+        _rounded_rect(img, (x1, y1), (x1 + tw + 32, y1 + th + 18), 12, STATE_COLORS[State.SETTLING])
+        cv2.putText(img, text, (x1 + 16, y1 + th + 9), FONT, 0.55, INK, 1, AA)
 
     def _draw_volume_meter(self, img, volume: Optional[float], now: float) -> None:
         H, W = img.shape[:2]

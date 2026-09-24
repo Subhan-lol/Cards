@@ -11,12 +11,12 @@ from . import winapi
 class ReelControl:
     """Moves to the next/previous reel.
 
-    mode "scroll" sends mouse-wheel notches to whatever is under the mouse
-    pointer (works on Instagram, YouTube Shorts and TikTok without clicking).
-    mode "keys" presses the Down/Up arrow keys in the focused window.
+    mode "keys" presses the Down (next) / Up (previous) arrow key in the
+    focused window. mode "scroll" sends mouse-wheel notches to whatever is
+    under the mouse pointer instead.
     """
 
-    def __init__(self, mode: str = "scroll", notches: float = 1.0, invert: bool = False, dry_run: bool = False):
+    def __init__(self, mode: str = "keys", notches: float = 1.0, invert: bool = False, dry_run: bool = False):
         if mode not in ("scroll", "keys"):
             raise ValueError(f"unknown mode {mode!r}")
         self.mode = mode

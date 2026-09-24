@@ -23,7 +23,7 @@ class Options:
     camera: Union[int, str] = 0
     width: int = 640
     height: int = 480
-    mode: str = "scroll"
+    mode: str = "keys"
     scroll_notches: float = 1.0
     invert: bool = False
     volume_method: str = "keys"
@@ -64,10 +64,10 @@ def run(opts: Options) -> int:
     if reels.dry_run:
         _log("Dry run: gestures are printed instead of sent to Windows.")
     _log("Running. Swipe up = next reel, swipe down = previous, twist clockwise = volume up.")
-    if opts.mode == "scroll":
-        _log("Keep the mouse pointer over the reel (scroll mode).")
+    if opts.mode == "keys":
+        _log("Click once on the page playing the reels, so the arrow keys go there.")
     else:
-        _log("Click the browser playing the reels so it has keyboard focus (keys mode).")
+        _log("Keep the mouse pointer over the reel (scroll mode).")
     _log("Ctrl+Alt+P pauses/resumes, Ctrl+Alt+Q quits.")
 
     paused = False
@@ -105,8 +105,10 @@ def run(opts: Options) -> int:
             points = [(x * aspect, y) for x, y in landmarks] if landmarks else None
 
             for event in engine.update(t, points):
-                _handle(event, reels, volume)
-                hud.on_event(event, t)
+                if _handle(event, reels, volume):
+                    hud.on_event(event, t)
+                else:
+                    hud.warn("Click your reels page first", t)
 
             if not opts.preview:
                 continue
@@ -137,7 +139,13 @@ def run(opts: Options) -> int:
     return 0
 
 
-def _handle(event: Event, reels: ReelControl, volume: VolumeControl) -> None:
+def _handle(event: Event, reels: ReelControl, volume: VolumeControl) -> bool:
+    """Carry out a gesture. Returns False if it couldn't be delivered."""
+    swipe = event in (Event.SWIPE_UP, Event.SWIPE_DOWN)
+    if swipe and reels.mode == "keys" and not reels.dry_run and winapi.foreground_is_own(WINDOW):
+        # The arrow key would land in our own preview or console window.
+        _log("Swipe not sent: Reel Scroller's own window has focus. Click once on your reels page.")
+        return False
     try:
         if event is Event.SWIPE_UP:
             reels.next()
@@ -153,3 +161,4 @@ def _handle(event: Event, reels: ReelControl, volume: VolumeControl) -> None:
             _log(f"Twist left  -> volume -{volume.step}%")
     except OSError as exc:
         _log(f"Windows blocked the input: {exc}")
+    return True
