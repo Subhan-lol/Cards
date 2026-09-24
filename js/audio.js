@@ -176,6 +176,31 @@
       o.stop(t + 1);
     }
   };
+  // police whistle: a short blast then a long trilled one
+  A.whistle = function () {
+    if (!ok()) return;
+    const t = ctx.currentTime;
+    for (const [start, dur] of [[0, 0.2], [0.28, 0.6]]) {
+      const o = ctx.createOscillator(), g = ctx.createGain(), lfo = ctx.createOscillator(), lg = ctx.createGain();
+      o.type = 'sine';
+      o.frequency.value = 2650;
+      lfo.frequency.value = 27;
+      lg.gain.value = 150;
+      lfo.connect(lg);
+      lg.connect(o.frequency);
+      g.gain.setValueAtTime(0.0001, t + start);
+      g.gain.exponentialRampToValueAtTime(0.08, t + start + 0.02);
+      g.gain.setValueAtTime(0.08, t + start + dur - 0.05);
+      g.gain.exponentialRampToValueAtTime(0.0001, t + start + dur);
+      o.connect(g);
+      g.connect(sfx);
+      o.start(t + start);
+      o.stop(t + start + dur + 0.05);
+      lfo.start(t + start);
+      lfo.stop(t + start + dur + 0.05);
+      noise(t + start, dur, 0.04, 'bandpass', 2600, sfx, 2);
+    }
+  };
   A.click = function () {
     if (!ok()) return;
     tone(880, ctx.currentTime, 0.06, 'triangle', 0.15);

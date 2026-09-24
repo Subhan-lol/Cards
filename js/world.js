@@ -14,6 +14,7 @@
   const MOVING_SPEED = 9;
   const ACTIVATE_DIST = 125;
   const MAX_COINS = 700;
+  const SLEEPER = 1.3;
   W.JET_Y = 10;
 
   const rnd = (a, b) => a + Math.random() * (b - a);
@@ -45,64 +46,93 @@
     W.scenery = [];
     W.particles = [];
 
-    // gravel bed
-    const gravel = TX.gravel().clone();
-    gravel.needsUpdate = true;
-    gravel.repeat.set(4, 80);
-    W.gravelTex = gravel;
-    const ground = new THREE.Mesh(new THREE.PlaneGeometry(16, 320), new THREE.MeshLambertMaterial({ map: gravel }));
+    const std = M.std;
+    const scrollTex = (tex, rx, ry, tile) => {
+      const t = tex.clone();
+      t.needsUpdate = true;
+      t.repeat.set(rx, ry);
+      W.scroll.push({ t, tile });
+      return t;
+    };
+    W.scroll = [];
+
+    // gravel ground with relief
+    const ground = new THREE.Mesh(
+      new THREE.PlaneGeometry(16, 320),
+      std('#d2cabf', { map: scrollTex(TX.gravel(), 4, 80, 4), normalMap: scrollTex(TX.gravelNormal(), 4, 80, 4), ns: 1.2, r: 0.95 })
+    );
     ground.rotation.x = -Math.PI / 2;
     ground.position.z = -130;
     ground.receiveShadow = true;
     scene.add(ground);
 
     // grass beyond the walls
-    const grass = TX.grass().clone();
-    grass.needsUpdate = true;
-    grass.repeat.set(35, 80);
-    W.grassTex = grass;
+    const grassMat = std('#ffffff', { map: scrollTex(TX.grass(), 35, 80, 4), r: 0.95 });
     for (const side of [-1, 1]) {
-      const g = new THREE.Mesh(new THREE.PlaneGeometry(140, 320), new THREE.MeshLambertMaterial({ map: grass }));
+      const g = new THREE.Mesh(new THREE.PlaneGeometry(140, 320), grassMat);
       g.rotation.x = -Math.PI / 2;
       g.position.set(side * 78, -0.02, -130);
+      g.receiveShadow = true;
       scene.add(g);
     }
 
-    // sleepers under each track
-    const sleep = TX.sleepers().clone();
-    sleep.needsUpdate = true;
-    sleep.repeat.set(1, 320 / 1.3);
-    W.sleeperTex = sleep;
-    const sleepMat = new THREE.MeshLambertMaterial({ map: sleep });
-    for (const x of C.LANES) {
-      const bed = new THREE.Mesh(new THREE.PlaneGeometry(2.4, 320), sleepMat);
-      bed.rotation.x = -Math.PI / 2;
-      bed.position.set(x, 0.015, -130);
-      bed.receiveShadow = true;
-      scene.add(bed);
-    }
+    // raised ballast bed under each track
+    const bedMat = std('#a89f94', { map: scrollTex(TX.gravel(), 0.8, 80, 4), normalMap: scrollTex(TX.gravelNormal(), 0.8, 80, 4), ns: 1.4, r: 0.95 });
+    const beds = [];
+    for (const x of C.LANES) beds.push({ geo: M.G.rbox(3.1, 0.12, 320, 0.05, 2), mat: bedMat, pos: [x, 0.0, -130] });
+    const bedMesh = M.bake(beds, false);
+    scene.add(bedMesh);
 
-    // rails + overhead wires (they look identical everywhere, so they never move)
+    // wooden sleepers: one instanced mesh that slides by the sleeper spacing
+    const wood = std('#ffffff', { map: TX.wood(), normalMap: TX.woodNormal(), ns: 1.5, r: 0.9 });
+    const plate = std('#3b3d42', { m: 0.7, r: 0.5 }), bolt = std('#8c9097', { m: 0.9, r: 0.3 });
+    const sParts = [{ geo: new THREE.BoxGeometry(2.5, 0.09, 0.26), mat: wood, pos: [0, 0.1, 0] }];
+    for (const o of [-0.72, 0.72]) {
+      sParts.push({ geo: new THREE.BoxGeometry(0.26, 0.02, 0.24), mat: plate, pos: [o, 0.15, 0] });
+      for (const d of [-0.09, 0.09]) sParts.push({ geo: new THREE.BoxGeometry(0.03, 0.03, 0.03), mat: bolt, pos: [o + d, 0.165, d * 0.6] });
+    }
+    const sg = M.merge(sParts);
+    const PER = 262;
+    W.sleepers = new THREE.InstancedMesh(sg.geo, sg.mats, PER * 3);
+    const d = new THREE.Object3D();
+    let n = 0;
+    for (const x of C.LANES) {
+      for (let k = 0; k < PER; k++) {
+        d.position.set(x, 0, 20 - k * SLEEPER);
+        d.rotation.y = (((k * 7919) % 13) - 6) * 0.004;
+        d.updateMatrix();
+        W.sleepers.setMatrixAt(n++, d.matrix);
+      }
+    }
+    W.sleepers.receiveShadow = true;
+    W.sleepers.frustumCulled = false;
+    scene.add(W.sleepers);
+
+    // rails (steel profile) and overhead wires never move: they look the same everywhere
+    const railShape = new THREE.Shape();
+    [[-0.07, 0], [0.07, 0], [0.07, 0.018], [0.016, 0.032], [0.016, 0.085], [0.036, 0.095], [0.036, 0.125], [-0.036, 0.125], [-0.036, 0.095], [-0.016, 0.085], [-0.016, 0.032], [-0.07, 0.018]]
+      .forEach(([x, y], i) => (i ? railShape.lineTo(x, y) : railShape.moveTo(x, y)));
+    const railGeo = new THREE.ExtrudeGeometry(railShape, { depth: 330, bevelEnabled: false });
+    const railMat = std('#6a7078', { m: 0.8, r: 0.5 }), railTop = std('#e8edf2', { m: 1, r: 0.12 }), wire = std('#2d2f33', { m: 0.6, r: 0.5 });
     const parts = [];
-    const railMat = M.toon('#8d949c'), railTop = M.toon('#e4e9ee'), wire = M.basic('#2d2f33');
     for (const x of C.LANES) {
       for (const o of [-0.72, 0.72]) {
-        parts.push({ geo: new THREE.BoxGeometry(0.12, 0.16, 320), mat: railMat, pos: [x + o, 0.08, -130] });
-        parts.push({ geo: new THREE.BoxGeometry(0.07, 0.03, 320), mat: railTop, pos: [x + o, 0.17, -130] });
+        parts.push({ geo: railGeo, mat: railMat, pos: [x + o, 0.16, -305] });
+        parts.push({ geo: new THREE.BoxGeometry(0.066, 0.008, 330), mat: railTop, pos: [x + o, 0.289, -140] });
       }
-      parts.push({ geo: new THREE.BoxGeometry(0.03, 0.03, 320), mat: wire, pos: [x, 6.05, -130] });
-      parts.push({ geo: new THREE.BoxGeometry(0.025, 0.025, 320), mat: wire, pos: [x, 6.45, -130] });
+      parts.push({ geo: new THREE.BoxGeometry(0.03, 0.03, 330), mat: wire, pos: [x, 6.05, -140] });
+      parts.push({ geo: new THREE.BoxGeometry(0.025, 0.025, 330), mat: wire, pos: [x, 6.45, -140] });
     }
-    const merged = M.merge(parts);
-    const rails = new THREE.Mesh(merged.geo, merged.mats);
-    rails.receiveShadow = true;
+    const rails = M.bake(parts, false);
     scene.add(rails);
 
     // coins: one instanced mesh for all of them
-    W.coinMesh = new THREE.InstancedMesh(M.coinGeometry(), M.coinMaterials(), MAX_COINS);
+    const cg = M.coinGeoMats();
+    W.coinMesh = new THREE.InstancedMesh(cg.geo, cg.mats, MAX_COINS);
     W.coinMesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
     W.coinMesh.frustumCulled = false;
     W.coinMesh.count = 0;
+    W.coinMesh.castShadow = true;
     scene.add(W.coinMesh);
     W._dummy = new THREE.Object3D();
     W._spin = new THREE.Quaternion();
@@ -417,9 +447,19 @@
   function genChunk(s0) {
     const g = new THREE.Group();
     W.chunkIndex = (W.chunkIndex || 0) + 1;
-    const bridge = s0 - W.lastBridgeS > 260 && chance(0.2);
+    // stations: a run of three chunks with platforms on both sides
+    if (!W.stationLeft && W.chunkIndex > 8 && W.chunkIndex - W.lastStation > 14 && chance(0.3)) {
+      W.stationLeft = 3;
+      W.lastStation = W.chunkIndex;
+      W.stationName = ri(0, 5);
+    }
+    const station = W.stationLeft > 0;
+    if (station) W.stationLeft--;
+    const bridge = !station && s0 - W.lastBridgeS > 260 && chance(0.2);
     for (const side of [-1, 1]) {
-      if (chance(0.82)) {
+      if (station) {
+        g.add(M.makePlatform(side, W.stationLeft === 1, W.stationName, ri(0, 4)));
+      } else if (chance(0.82)) {
         const w = M.makeWall(ri(0, TX.WALL_VARIANTS - 1), side);
         w.position.x = side * 7.0;
         g.add(w);
@@ -430,19 +470,26 @@
         for (let i = 0; i < 3; i++) {
           const b = M.makeBush();
           b.position.set(side * rnd(7.6, 8.6), 0, -rnd(1, 19));
+          b.rotation.y = rnd(0, 6);
           g.add(b);
         }
       }
       if (!bridge) {
         const w = pick([8, 10, 12]), h = pick([9, 12, 15, 18, 21, 24]), d = pick([14, 16, 18]);
-        const b = M.makeBuilding(w, h, d, ri(0, TX.BUILDING_COLORS.length - 1));
-        b.position.set(side * (10 + w / 2 + rnd(0, 3)), 0, -10);
+        const b = M.makeBuilding(w, h, d, ri(0, TX.BUILDING_COLORS.length - 1), side);
+        b.position.set(side * (10 + w / 2 + rnd(0, 3) + (station ? 1.5 : 0)), 0, -10);
         g.add(b);
       }
       if (chance(0.4)) {
         const t = M.makeTree(ri(0, 2));
         t.position.set(side * rnd(8.3, 9.2), 0, -rnd(2, 18));
+        t.rotation.y = rnd(0, 6);
         g.add(t);
+      }
+      if (!station && W.chunkIndex % 2 === 1) {
+        const l = M.makeLamp(side);
+        l.position.set(side * 6.3, 0, -rnd(3, 17));
+        g.add(l);
       }
     }
     if (bridge) {
@@ -450,10 +497,10 @@
       b.position.z = -10;
       g.add(b);
       W.lastBridgeS = s0;
-    } else if (W.chunkIndex % 2 === 0) {
+    } else if (!station && W.chunkIndex % 2 === 0) {
       g.add(M.makeGantry());
     }
-    if (chance(0.25)) {
+    if (!station && chance(0.25)) {
       const sig = M.makeSignal();
       sig.position.set(pick([-1, 1]) * 4.5, 0, -rnd(4, 16));
       g.add(sig);
@@ -485,6 +532,8 @@
     W.skyLane = 1;
     W._speed = 14;
     W.chunkIndex = 0;
+    W.stationLeft = 0;
+    W.lastStation = -20;
     for (const p of W.particles) {
       p.life = 0;
       p.sprite.visible = false;
@@ -547,9 +596,8 @@
     }
 
     // ground scroll
-    W.gravelTex.offset.y = (tr / 4) % 1;
-    W.grassTex.offset.y = (tr / 4) % 1;
-    W.sleeperTex.offset.y = (tr / 1.3) % 1;
+    for (const sc of W.scroll) sc.t.offset.y = (tr / sc.tile) % 1;
+    W.sleepers.position.z = tr % SLEEPER;
 
     // obstacles
     for (let i = W.obstacles.length - 1; i >= 0; i--) {

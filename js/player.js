@@ -12,15 +12,10 @@
   const STAND_H = 1.75, ROLL_H = 0.8;
   const TWO_PI = Math.PI * 2;
 
-  const JOINTS = [
-    'bodyY', 'bodyRY', 'bodyRZ', 'torsoRX', 'torsoRY', 'torsoRZ', 'neckRX', 'neckRY',
-    'hipLX', 'hipRX', 'hipLZ', 'hipRZ', 'kneeL', 'kneeR', 'shLX', 'shRX', 'shLZ', 'shRZ', 'elL', 'elR',
-  ];
 
   class Player {
     constructor(scene, style) {
       this.scene = scene;
-      this.cur = {};
       this.setStyle(style);
       this.reset();
     }
@@ -33,6 +28,7 @@
       }
       this.style = style;
       this.rig = RD.models.makeRunner(style);
+      this.anim = new RD.Humanoid(this.rig);
       this.scene.add(this.rig.root);
       this.scene.add(this.rig.blob);
     }
@@ -51,8 +47,8 @@
       r.body.rotation.set(0, 0, 0);
       r.board.visible = false;
       r.jet.visible = false;
-      for (const j of JOINTS) this.cur[j] = 0;
-      this.cur.bodyY = C.HIP_Y;
+      this.justLanded = false;
+      this.prevX = 0;
     }
 
     get height() {
@@ -177,6 +173,7 @@
         this.grounded = true;
         this.flipping = false;
         if (landing) {
+          this.justLanded = true;
           this.fastFall = false;
           if (ctx.onLand) ctx.onLand();
           if (this.rollQueued) {
@@ -224,198 +221,50 @@
 
     /* ---------- animation ---------- */
     animate(dt, speed, time, mode) {
-      const r = this.rig, T = {}, cur = this.cur;
-      const set = (k, v) => (T[k] = v);
-      for (const j of JOINTS) T[j] = 0;
-      T.bodyY = C.HIP_Y;
-      let rate = 22;
-
+      const r = this.rig;
       r.board.visible = this.board && !this.jet && mode !== 'menu';
       r.jet.visible = this.jet;
-      r.root.position.set(this.x, this.y + (r.board.visible ? 0.28 : 0), 0);
+      r.root.position.set(this.x, this.y + C.FOOT_Y + (r.board.visible ? 0.28 : 0), 0);
 
-      if (mode === 'menu') {
-        this.idleT += dt;
-        set('bodyY', C.HIP_Y + Math.sin(time * 2) * 0.012);
-        set('shLZ', -0.15);
-        set('shRZ', 0.15);
-        set('elL', 0.3);
-        set('elR', 0.3);
-        set('neckRY', Math.sin(time * 0.7) * 0.35);
-        set('hipLZ', -0.05);
-        set('hipRZ', 0.05);
-        const w = time % 7;
-        if (w < 1.6) {
-          // wave hello
-          set('shRZ', 2.5);
-          set('shRX', 0.3);
-          set('elR', 0.6 + Math.sin(time * 14) * 0.35);
-          set('neckRX', -0.1);
-        }
-        rate = 10;
-      } else if (!this.alive) {
-        // knocked over backwards
-        const k = Math.min(1, this.deadT / 0.35);
-        r.root.rotation.x = k * 1.35;
-        r.body.rotation.x = 0;
-        set('shLZ', -1.8);
-        set('shRZ', 1.8);
-        set('elL', 0.8);
-        set('elR', 0.8);
-        set('hipLX', 0.9);
-        set('hipRX', 0.4);
-        set('kneeL', -0.6);
-        set('kneeR', -0.3);
-        set('neckRX', 0.4);
-        rate = 12;
-      } else if (this.jet) {
-        r.body.rotation.x += (-0.45 - r.body.rotation.x) * Math.min(1, dt * 6);
-        set('hipLX', -0.25);
-        set('hipRX', -0.15);
-        set('kneeL', -0.7);
-        set('kneeR', -0.5);
-        set('shLX', -0.5);
-        set('shRX', -0.5);
-        set('shLZ', -0.4);
-        set('shRZ', 0.4);
-        set('elL', 0.4);
-        set('elR', 0.4);
-        set('neckRX', 0.35);
-        set('bodyRZ', Math.sin(time * 3) * 0.08 - (C.LANES[this.lane] - this.x) * 0.12);
-        for (const f of r.flames) {
-          const s = 0.8 + Math.random() * 0.5;
-          f.scale.set(1, s, 1);
-        }
-      } else if (this.rollT > 0) {
-        const p = 1 - this.rollT / ROLL_TIME;
-        r.body.rotation.x = -p * TWO_PI;
-        set('bodyY', 0.52);
-        set('hipLX', 1.9);
-        set('hipRX', 1.9);
-        set('kneeL', -2.4);
-        set('kneeR', -2.4);
-        set('shLX', 1.2);
-        set('shRX', 1.2);
-        set('shLZ', -0.3);
-        set('shRZ', 0.3);
-        set('elL', 1.6);
-        set('elR', 1.6);
-        set('torsoRX', -0.6);
-        set('neckRX', -0.4);
-        rate = 35;
-      } else if (this.board && this.grounded) {
-        r.body.rotation.x *= 0.8;
-        set('bodyY', C.HIP_Y - 0.1);
-        set('bodyRY', 0.75);
-        set('hipLX', 0.4);
-        set('hipRX', -0.4);
-        set('kneeL', -0.55);
-        set('kneeR', -0.55);
-        set('shLZ', -1.1 + Math.sin(time * 3) * 0.1);
-        set('shRZ', 1.1 - Math.sin(time * 3) * 0.1);
-        set('elL', 0.3);
-        set('elR', 0.3);
-        set('neckRY', -0.7);
-        set('bodyRZ', -(C.LANES[this.lane] - this.x) * 0.12 + Math.sin(time * 2.5) * 0.05);
-      } else if (!this.grounded) {
-        if (this.flipping) {
-          const v0 = SUPER_JUMP_V;
-          const p = Math.min(1, Math.max(0, (v0 - this.vy) / (2 * v0)));
-          r.body.rotation.x = -p * TWO_PI;
-        } else {
-          r.body.rotation.x *= Math.max(0, 1 - dt * 12);
-        }
-        if (this.fastFall) {
-          set('hipLX', 1.4);
-          set('hipRX', 1.4);
-          set('kneeL', -2.0);
-          set('kneeR', -2.0);
-          set('shLX', 1.0);
-          set('shRX', 1.0);
-          set('elL', 1.4);
-          set('elR', 1.4);
-          set('torsoRX', -0.4);
-        } else {
-          set('hipLX', 1.05);
-          set('kneeL', -1.5);
-          set('hipRX', -0.35);
-          set('kneeR', -0.6);
-          set('shLX', -0.3);
-          set('shRX', 0.4);
-          set('shLZ', -1.0);
-          set('shRZ', 1.1);
-          set('elL', 0.6);
-          set('elR', 0.5);
-          set('torsoRX', -0.1);
-          set('neckRX', 0.1);
-        }
-        if (this.board) set('bodyRY', 0.5);
-        set('bodyRZ', -(C.LANES[this.lane] - this.x) * 0.15);
-      } else {
-        // running
-        r.body.rotation.x *= Math.max(0, 1 - dt * 14);
-        this.phase += dt * (8 + speed * 0.28);
-        const s = Math.sin(this.phase), c = Math.cos(this.phase);
-        set('hipLX', s * 0.95);
-        set('hipRX', -s * 0.95);
-        set('kneeL', -(Math.max(0, c) * 1.4 + 0.15));
-        set('kneeR', -(Math.max(0, -c) * 1.4 + 0.15));
-        set('shLX', -s * 0.85);
-        set('shRX', s * 0.85);
-        set('shLZ', -0.12);
-        set('shRZ', 0.12);
-        set('elL', 1.35);
-        set('elR', 1.35);
-        set('bodyY', C.HIP_Y - 0.03 + (1 - Math.abs(s)) * 0.08);
-        set('torsoRX', -0.22);
-        set('torsoRY', s * 0.18);
-        set('neckRX', 0.12);
-        set('neckRY', -s * 0.1);
-        set('bodyRZ', Math.max(-0.35, Math.min(0.35, -(C.LANES[this.lane] - this.x) * 0.15)));
-        rate = 28;
+      let state = 'run', spin = -1;
+      if (mode === 'menu') state = 'idle';
+      else if (!this.alive) state = 'dead';
+      else if (this.jet) state = 'jet';
+      else if (this.rollT > 0) {
+        state = 'roll';
+        spin = 1 - this.rollT / ROLL_TIME;
+      } else if (this.board && this.grounded) state = 'board';
+      else if (!this.grounded) {
+        state = this.fastFall ? 'dive' : 'air';
+        if (this.flipping) spin = Math.min(1, Math.max(0, (SUPER_JUMP_V - this.vy) / (2 * SUPER_JUMP_V)));
       }
 
-      if (mode !== 'menu' && this.alive) r.root.rotation.x = 0;
-      if (this.stumbleT > 0 && this.alive) {
-        const k = this.stumbleT;
-        T.shLX += Math.sin(time * 31) * 1.2 * k;
-        T.shRX += Math.cos(time * 29) * 1.2 * k;
-        T.shLZ -= 0.8 * k;
-        T.shRZ += 0.8 * k;
-        T.torsoRZ = Math.sin(time * 24) * 0.35 * k;
-        T.neckRX = -0.3 * k;
-      }
-      if (this.bumpT > 0) T.bodyRZ += this.bumpDir * -0.5 * (this.bumpT / 0.25);
+      if (!this.alive) r.root.rotation.x += (Math.min(1, this.deadT / 0.35) * 1.35 - r.root.rotation.x) * Math.min(1, dt * 20);
+      else r.root.rotation.x = 0;
 
-      const a = Math.min(1, dt * rate);
-      for (const j of JOINTS) cur[j] += (T[j] - cur[j]) * a;
+      const laneVel = dt > 0 ? (this.x - this.prevX) / dt : 0;
+      this.prevX = this.x;
+      this.anim.update(dt, {
+        state, speed, time, spin, laneVel,
+        vy: this.vy, v0: this.superJump ? SUPER_JUMP_V : JUMP_V,
+        stumble: this.stumbleT, bump: this.bumpT / 0.25, bumpDir: this.bumpDir,
+        landed: this.justLanded, wave: true,
+      });
+      this.justLanded = false;
 
-      r.body.position.y = cur.bodyY;
-      r.body.rotation.y = cur.bodyRY;
-      r.body.rotation.z = cur.bodyRZ;
-      r.torso.rotation.set(cur.torsoRX, cur.torsoRY, cur.torsoRZ);
-      r.neck.rotation.set(cur.neckRX, cur.neckRY, 0);
-      r.legL.hip.rotation.set(cur.hipLX, 0, cur.hipLZ);
-      r.legR.hip.rotation.set(cur.hipRX, 0, cur.hipRZ);
-      r.legL.knee.rotation.x = cur.kneeL;
-      r.legR.knee.rotation.x = cur.kneeR;
-      r.armL.shoulder.rotation.set(cur.shLX, 0, cur.shLZ);
-      r.armR.shoulder.rotation.set(cur.shRX, 0, cur.shRZ);
-      r.armL.elbow.rotation.x = cur.elL;
-      r.armR.elbow.rotation.x = cur.elR;
-
+      if (r.jet.visible) for (const f of r.flames) f.scale.set(1, 0.8 + Math.random() * 0.5, 1);
       if (r.board.visible) {
         r.board.position.y = -0.16 + Math.sin(time * 6) * 0.03;
-        r.board.rotation.z = -cur.bodyRZ * 0.6;
+        r.board.rotation.z = -r.body.rotation.z * 0.6;
         r.boardGlow.material.opacity = 0.6 + Math.sin(time * 10) * 0.2;
       }
 
       // blob shadow
-      const b = r.blob;
+      const bl = r.blob;
       const hgt = Math.max(0, this.y - this.groundY);
-      b.position.set(this.x, this.groundY + 0.03, 0);
-      b.scale.setScalar(Math.max(0.35, 1 - hgt * 0.07));
-      b.material.opacity = 0.3 * Math.max(0.3, 1 - hgt * 0.06);
+      bl.position.set(this.x, this.groundY + C.FOOT_Y + 0.03, 0);
+      bl.scale.setScalar(Math.max(0.35, 1 - hgt * 0.07));
+      bl.material.opacity = 0.3 * Math.max(0.3, 1 - hgt * 0.06);
     }
   }
 

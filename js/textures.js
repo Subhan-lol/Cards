@@ -6,6 +6,9 @@
   const RD = (window.RD = window.RD || {});
   const T = (RD.tex = {});
 
+  // colours in the code are sRGB; let three.js convert them to linear for lighting
+  THREE.ColorManagement.legacyMode = false;
+
   const cache = {};
   function once(key, fn) {
     if (!cache[key]) cache[key] = fn();
@@ -24,12 +27,39 @@
     return c;
   }
 
-  function toTexture(c, repeat) {
+  function toTexture(c, repeat, linear) {
     const t = new THREE.CanvasTexture(c);
     t.anisotropy = 8;
+    if (!linear) t.encoding = THREE.sRGBEncoding;
     if (repeat) t.wrapS = t.wrapT = THREE.RepeatWrapping;
     return t;
   }
+
+  // Build a tangent-space normal map from a canvas, treating brightness as height.
+  function normalFrom(src, strength, repeat) {
+    const W = src.width, H = src.height;
+    const px = src.getContext('2d').getImageData(0, 0, W, H).data;
+    const h = new Float32Array(W * H);
+    for (let i = 0; i < W * H; i++) h[i] = (px[i * 4] + px[i * 4 + 1] + px[i * 4 + 2]) / 765;
+    const c = makeCanvas(W, H), g = c.getContext('2d');
+    const out = g.createImageData(W, H);
+    const at = (x, y) => h[((y + H) % H) * W + ((x + W) % W)];
+    for (let y = 0; y < H; y++) {
+      for (let x = 0; x < W; x++) {
+        const dx = (at(x + 1, y) - at(x - 1, y)) * strength;
+        const dy = (at(x, y + 1) - at(x, y - 1)) * strength;
+        const len = Math.hypot(dx, dy, 1);
+        const i = (y * W + x) * 4;
+        out.data[i] = ((-dx / len) * 0.5 + 0.5) * 255;
+        out.data[i + 1] = ((dy / len) * 0.5 + 0.5) * 255;
+        out.data[i + 2] = ((1 / len) * 0.5 + 0.5) * 255;
+        out.data[i + 3] = 255;
+      }
+    }
+    g.putImageData(out, 0, 0);
+    return toTexture(c, repeat, true);
+  }
+  T.normalFrom = normalFrom;
 
   function shade(hex, amt) {
     const c = new THREE.Color(hex);
@@ -100,8 +130,43 @@
           g.fill();
         });
       }
-      const t = toTexture(c, true);
-      return t;
+      T._gravelCanvas = c;
+      return toTexture(c, true);
+    });
+  T.gravelNormal = () =>
+    once('gravelN', () => {
+      T.gravel();
+      return normalFrom(T._gravelCanvas, 6, true);
+    });
+
+  T.wood = () =>
+    once('wood', () => {
+      const W = 64, H = 256, c = makeCanvas(W, H), g = c.getContext('2d');
+      g.fillStyle = '#6e4b2e';
+      g.fillRect(0, 0, W, H);
+      for (let i = 0; i < 40; i++) {
+        g.strokeStyle = `rgba(${rnd(30, 70) | 0},${rnd(18, 40) | 0},10,${rnd(0.25, 0.6)})`;
+        g.lineWidth = rnd(0.6, 2.2);
+        const x = rnd(0, W);
+        g.beginPath();
+        g.moveTo(x, 0);
+        g.bezierCurveTo(x + rnd(-6, 6), H * 0.33, x + rnd(-6, 6), H * 0.66, x + rnd(-3, 3), H);
+        g.stroke();
+      }
+      for (let i = 0; i < 4; i++) {
+        g.fillStyle = 'rgba(40,25,12,0.5)';
+        g.beginPath();
+        g.ellipse(rnd(8, W - 8), rnd(10, H - 10), rnd(2, 5), rnd(5, 12), 0, 0, Math.PI * 2);
+        g.fill();
+      }
+      noise(g, W, H, 600, 0.08);
+      T._woodCanvas = c;
+      return toTexture(c, true);
+    });
+  T.woodNormal = () =>
+    once('woodN', () => {
+      T.wood();
+      return normalFrom(T._woodCanvas, 3, true);
     });
 
   T.sleepers = () =>
@@ -357,7 +422,13 @@
       g.fillStyle = '#9d9890';
       g.fillRect(0, 0, W, H);
       noise(g, W, H, 1500, 0.12);
+      T._concreteCanvas = c;
       return toTexture(c, true);
+    });
+  T.concreteNormal = () =>
+    once('concreteN', () => {
+      T.concrete();
+      return normalFrom(T._concreteCanvas, 2.5, true);
     });
 
   T.fence = () =>
@@ -381,15 +452,17 @@
 
   /* ---------- buildings ---------- */
   T.BUILDING_COLORS = ['#c8765a', '#e2cba4', '#8fa4ba', '#d8d2c8', '#b85f5f', '#7f9a82', '#e59f5c', '#9d88b8'];
-  T.building = (i) =>
-    once('bld' + i, () => {
+  function buildingPair(i) {
+    return once('bldPair' + i, () => {
       const W = 256, H = 256, c = makeCanvas(W, H), g = c.getContext('2d');
+      const e = makeCanvas(W, H), ge = e.getContext('2d');
+      ge.fillStyle = '#000';
+      ge.fillRect(0, 0, W, H);
       const base = T.BUILDING_COLORS[i % T.BUILDING_COLORS.length];
       g.fillStyle = base;
       g.fillRect(0, 0, W, H);
       noise(g, W, H, 1200, 0.08);
       if (i % 3 === 0) {
-        // brick courses
         g.strokeStyle = 'rgba(0,0,0,0.12)';
         g.lineWidth = 1;
         for (let y = 0; y < H; y += 8) {
@@ -397,25 +470,45 @@
           g.moveTo(0, y);
           g.lineTo(W, y);
           g.stroke();
+          for (let x = (y / 8) % 2 ? 0 : 12; x < W; x += 24) {
+            g.beginPath();
+            g.moveTo(x, y);
+            g.lineTo(x, y + 8);
+            g.stroke();
+          }
         }
       }
-      // 2 x 2 windows per tile
+      // floor ledges
+      for (let r = 0; r < 2; r++) {
+        g.fillStyle = shade(base, 22);
+        g.fillRect(0, r * 128 + 122, W, 6);
+        g.fillStyle = 'rgba(0,0,0,0.25)';
+        g.fillRect(0, r * 128 + 128, W, 3);
+      }
       for (let r = 0; r < 2; r++) {
         for (let k = 0; k < 2; k++) {
-          const x = k * 128 + 30, y = r * 128 + 30, w = 68, h = 76;
-          g.fillStyle = shade(base, -35);
+          const x = k * 128 + 30, y = r * 128 + 26, w = 68, h = 80;
+          g.fillStyle = shade(base, -40);
           g.fillRect(x - 6, y - 6, w + 12, h + 16);
-          const lit = Math.random() < 0.25;
+          const lit = Math.random() < 0.3;
           const gr = g.createLinearGradient(x, y, x + w, y + h);
           if (lit) {
             gr.addColorStop(0, '#fff3b0');
             gr.addColorStop(1, '#ffc766');
+            ge.fillStyle = '#ffcf7a';
+            ge.fillRect(x, y, w, h);
           } else {
-            gr.addColorStop(0, '#9fd3ff');
-            gr.addColorStop(1, '#3d6a9a');
+            gr.addColorStop(0, '#a9d8ff');
+            gr.addColorStop(1, '#35618f');
           }
           g.fillStyle = gr;
           g.fillRect(x, y, w, h);
+          // curtains in some windows
+          if (Math.random() < 0.35) {
+            g.fillStyle = pick(['rgba(230,90,90,0.8)', 'rgba(250,240,220,0.85)', 'rgba(90,150,220,0.8)']);
+            g.fillRect(x, y, w * 0.3, h);
+            g.fillRect(x + w * 0.7, y, w * 0.3, h);
+          }
           g.fillStyle = 'rgba(255,255,255,0.35)';
           g.beginPath();
           g.moveTo(x, y + h * 0.6);
@@ -424,12 +517,144 @@
           g.lineTo(x, y + h * 0.85);
           g.fill();
           g.fillStyle = shade(base, 30);
-          g.fillRect(x - 4, y + h, w + 8, 8);
-          g.fillStyle = shade(base, -45);
+          g.fillRect(x - 5, y + h, w + 10, 8);
+          g.fillStyle = shade(base, -50);
           g.fillRect(x + w / 2 - 2, y, 4, h);
+          g.fillRect(x, y + h * 0.45, w, 3);
         }
       }
+      T['_bldCanvas' + i] = c;
+      return { map: toTexture(c, true), glow: toTexture(e, true) };
+    });
+  }
+  T.building = (i) => buildingPair(i).map;
+  T.buildingGlow = (i) => buildingPair(i).glow;
+  T.buildingNormal = (i) =>
+    once('bldN' + i, () => {
+      buildingPair(i);
+      return normalFrom(T['_bldCanvas' + i], 2, true);
+    });
+
+  /* ---------- distant city skyline ---------- */
+  T.skyline = (layer) =>
+    once('skyline' + layer, () => {
+      const W = 2048, H = 256, c = makeCanvas(W, H), g = c.getContext('2d');
+      g.clearRect(0, 0, W, H);
+      const col = layer ? '#8fb3d6' : '#6f93bb';
+      const win = layer ? 'rgba(235,245,255,0.35)' : 'rgba(255,240,200,0.4)';
+      let x = 0;
+      while (x < W) {
+        const w = rnd(40, 110), h = rnd(60, layer ? 170 : 230);
+        g.fillStyle = col;
+        g.fillRect(x, H - h, w, h);
+        if (Math.random() < 0.25) {
+          g.fillRect(x + w * 0.4, H - h - rnd(15, 40), w * 0.2, 40);
+        }
+        if (Math.random() < 0.15) {
+          g.beginPath();
+          g.moveTo(x, H - h);
+          g.lineTo(x + w / 2, H - h - rnd(20, 50));
+          g.lineTo(x + w, H - h);
+          g.fill();
+        }
+        g.fillStyle = win;
+        for (let yy = H - h + 8; yy < H - 6; yy += 12) {
+          for (let xx = x + 6; xx < x + w - 6; xx += 10) if (Math.random() < 0.5) g.fillRect(xx, yy, 4, 5);
+        }
+        x += w + rnd(0, 12);
+      }
+      const t = toTexture(c, false);
+      t.wrapS = THREE.RepeatWrapping;
+      return t;
+    });
+
+  /* ---------- station ---------- */
+  T.tiles = () =>
+    once('tiles', () => {
+      const W = 128, H = 128, c = makeCanvas(W, H), g = c.getContext('2d');
+      g.fillStyle = '#c9c3b8';
+      g.fillRect(0, 0, W, H);
+      noise(g, W, H, 900, 0.07);
+      g.strokeStyle = 'rgba(80,70,60,0.35)';
+      g.lineWidth = 2;
+      for (let i = 0; i <= W; i += 32) {
+        g.beginPath();
+        g.moveTo(i, 0);
+        g.lineTo(i, H);
+        g.stroke();
+        g.beginPath();
+        g.moveTo(0, i);
+        g.lineTo(W, i);
+        g.stroke();
+      }
+      T._tilesCanvas = c;
       return toTexture(c, true);
+    });
+  T.tilesNormal = () =>
+    once('tilesN', () => {
+      T.tiles();
+      return normalFrom(T._tilesCanvas, 3, true);
+    });
+
+  T.poster = (v) =>
+    once('poster' + v, () => {
+      const W = 256, H = 384, c = makeCanvas(W, H), g = c.getContext('2d');
+      const [c1, c2] = PAIRS[v % PAIRS.length];
+      const gr = g.createLinearGradient(0, 0, W, H);
+      gr.addColorStop(0, c1);
+      gr.addColorStop(1, c2);
+      g.fillStyle = gr;
+      g.fillRect(0, 0, W, H);
+      g.fillStyle = 'rgba(255,255,255,0.9)';
+      g.font = '900 54px "Arial Black", sans-serif';
+      g.textAlign = 'center';
+      g.fillText(['RUN!', 'FLY', 'GO!', 'WOW', 'ZOOM'][v % 5], W / 2, 90);
+      for (let i = 0; i < 6; i++) doodle(g, rnd(40, W - 40), rnd(140, H - 60), rnd(40, 70));
+      g.strokeStyle = '#1b1b1b';
+      g.lineWidth = 10;
+      g.strokeRect(5, 5, W - 10, H - 10);
+      return toTexture(c);
+    });
+
+  T.stationSign = (name) =>
+    once('sign' + name, () => {
+      const W = 512, H = 96, c = makeCanvas(W, H), g = c.getContext('2d');
+      g.fillStyle = '#1f4f99';
+      roundRect(g, 0, 0, W, H, 18);
+      g.fill();
+      g.strokeStyle = '#ffffff';
+      g.lineWidth = 6;
+      roundRect(g, 8, 8, W - 16, H - 16, 12);
+      g.stroke();
+      g.fillStyle = '#ffffff';
+      g.font = '900 50px "Arial Black", sans-serif';
+      g.textAlign = 'center';
+      g.textBaseline = 'middle';
+      g.fillText(name, W / 2, H / 2 + 3);
+      return toTexture(c);
+    });
+
+  T.grille = () =>
+    once('grille', () => {
+      const W = 64, H = 64, c = makeCanvas(W, H), g = c.getContext('2d');
+      g.fillStyle = '#aeb5bd';
+      g.fillRect(0, 0, W, H);
+      g.fillStyle = '#5c636c';
+      for (let y = 4; y < H; y += 8) g.fillRect(4, y, W - 8, 3);
+      return toTexture(c, true);
+    });
+
+  T.ledText = (text, color) =>
+    once('led' + text + color, () => {
+      const W = 256, H = 48, c = makeCanvas(W, H), g = c.getContext('2d');
+      g.fillStyle = '#050505';
+      g.fillRect(0, 0, W, H);
+      g.fillStyle = color || '#ffb31f';
+      g.font = 'bold 30px monospace';
+      g.textAlign = 'center';
+      g.textBaseline = 'middle';
+      g.fillText(text, W / 2, H / 2 + 1);
+      return toTexture(c);
     });
 
   /* ---------- trains ---------- */

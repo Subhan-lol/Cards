@@ -46,40 +46,131 @@
     $('loading').innerHTML = 'Sorry - your browser could not start WebGL.<br>Try the latest Chrome, Edge or Firefox.';
     return;
   }
-  renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+  renderer.outputEncoding = THREE.sRGBEncoding;
+  renderer.toneMapping = THREE.ACESFilmicToneMapping;
+  renderer.toneMappingExposure = 1.0;
   renderer.shadowMap.enabled = true;
   renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 
   const scene = new THREE.Scene();
-  scene.background = RD.tex.sky();
-  scene.fog = new THREE.Fog(0xcdeeff, 70, 215);
+  const HORIZON = new THREE.Color('#bfe0f4');
+  scene.background = HORIZON;
+  scene.fog = new THREE.Fog(HORIZON, 75, 235);
+  const camera = new THREE.PerspectiveCamera(62, 1, 0.1, 460);
 
-  const camera = new THREE.PerspectiveCamera(62, 1, 0.1, 420);
+  // sky dome with a sun; the same shader lights the environment map
+  const SUN_DIR = new THREE.Vector3(0.42, 0.42, -0.8).normalize();
+  function skyMaterial() {
+    return new THREE.ShaderMaterial({
+      uniforms: {
+        top: { value: new THREE.Color('#1f6fd6') }, mid: { value: new THREE.Color('#62b4f5') }, horizon: { value: HORIZON },
+        ground: { value: new THREE.Color('#8c8070') }, sunDir: { value: SUN_DIR }, sunColor: { value: new THREE.Color('#fff2d2') },
+      },
+      vertexShader: 'varying vec3 vDir; void main(){ vDir = position; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }',
+      fragmentShader: `
+        uniform vec3 top, mid, horizon, ground, sunColor, sunDir; varying vec3 vDir;
+        void main() {
+          vec3 d = normalize(vDir); float h = d.y;
+          vec3 col = mix(horizon, mid, smoothstep(0.0, 0.22, h));
+          col = mix(col, top, smoothstep(0.22, 0.85, h));
+          col = mix(col, ground, smoothstep(0.0, -0.12, h));
+          float sd = max(dot(d, sunDir), 0.0);
+          col += sunColor * (pow(sd, 1200.0) * 8.0 + pow(sd, 60.0) * 0.45 + pow(sd, 6.0) * 0.12);
+          gl_FragColor = vec4(col, 1.0);
+          #include <tonemapping_fragment>
+          #include <encodings_fragment>
+        }`,
+      side: THREE.BackSide, depthWrite: false, fog: false,
+    });
+  }
+  const sky = new THREE.Mesh(new THREE.SphereGeometry(420, 32, 16), skyMaterial());
+  sky.renderOrder = -10;
+  sky.frustumCulled = false;
+  scene.add(sky);
 
-  scene.add(new THREE.HemisphereLight(0xeaf6ff, 0x8d7b62, 0.62));
-  scene.add(new THREE.AmbientLight(0xffffff, 0.12));
-  const sun = new THREE.DirectionalLight(0xfff6e6, 0.72);
-  sun.position.set(10, 24, 10);
-  sun.target.position.set(0, 0, -14);
+  // image-based lighting from the sky, so metal and glass have something to reflect
+  {
+    const envScene = new THREE.Scene();
+    envScene.add(new THREE.Mesh(new THREE.SphereGeometry(10, 32, 16), skyMaterial()));
+    const pmrem = new THREE.PMREMGenerator(renderer);
+    scene.environment = pmrem.fromScene(envScene, 0.02).texture;
+    pmrem.dispose();
+  }
+
+  // distant city skyline in two hazy layers
+  for (const [layer, z, y, h, tint] of [[1, -385, 26, 90, '#b9d3e8'], [0, -360, 18, 80, '#9dbbd6']]) {
+    const t = RD.tex.skyline(layer).clone();
+    t.needsUpdate = true;
+    t.repeat.set(2.5, 1);
+    const m = new THREE.Mesh(new THREE.PlaneGeometry(900, h), new THREE.MeshBasicMaterial({ map: t, color: tint, transparent: true, fog: false, depthWrite: false }));
+    m.position.set(0, y, z);
+    m.renderOrder = -9;
+    scene.add(m);
+  }
+
+  const hemi = new THREE.HemisphereLight(0xd6ecff, 0x8a7a64, 0.55);
+  scene.add(hemi);
+  const sun = new THREE.DirectionalLight(0xfff0d8, 2.4);
+  sun.position.copy(SUN_DIR).multiplyScalar(40);
   sun.castShadow = true;
   sun.shadow.mapSize.set(2048, 2048);
-  Object.assign(sun.shadow.camera, { left: -16, right: 16, top: 34, bottom: -30, near: 1, far: 90 });
-  sun.shadow.bias = -0.0008;
+  Object.assign(sun.shadow.camera, { left: -18, right: 18, top: 36, bottom: -30, near: 1, far: 110 });
+  sun.shadow.bias = -0.0005;
+  sun.shadow.normalBias = 0.02;
   scene.add(sun, sun.target);
 
-  // sky decoration: sun glow and drifting clouds
-  const sunGlow = new THREE.Sprite(new THREE.SpriteMaterial({ map: RD.tex.glow(), color: 0xfff3c4, fog: false, transparent: true, depthWrite: false }));
-  sunGlow.scale.set(120, 120, 1);
-  sunGlow.position.set(140, 120, -330);
-  scene.add(sunGlow);
   const clouds = [];
-  for (let i = 0; i < 12; i++) {
-    const s = new THREE.Sprite(new THREE.SpriteMaterial({ map: RD.tex.cloud(i % 4), fog: false, transparent: true, depthWrite: false }));
-    const sc = RD.tex.rnd(50, 90);
+  for (let i = 0; i < 14; i++) {
+    const s = new THREE.Sprite(new THREE.SpriteMaterial({ map: RD.tex.cloud(i % 4), fog: false, transparent: true, depthWrite: false, opacity: 0.95 }));
+    const sc = RD.tex.rnd(50, 95);
     s.scale.set(sc, sc / 2, 1);
-    s.position.set(RD.tex.rnd(-220, 220), RD.tex.rnd(45, 105), RD.tex.rnd(-300, -360));
+    s.position.set(RD.tex.rnd(-240, 240), RD.tex.rnd(50, 115), RD.tex.rnd(-320, -380));
+    s.renderOrder = -8;
     scene.add(s);
     clouds.push(s);
+  }
+
+  /* ---------- post-processing (HIGH quality) ---------- */
+  const GradeShader = {
+    uniforms: { tDiffuse: { value: null }, vignette: { value: 0.32 }, saturation: { value: 1.12 }, contrast: { value: 1.05 } },
+    vertexShader: 'varying vec2 vUv; void main(){ vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }',
+    fragmentShader: `
+      uniform sampler2D tDiffuse; uniform float vignette, saturation, contrast; varying vec2 vUv;
+      vec3 toSRGB(vec3 c) { return mix(c * 12.92, 1.055 * pow(c, vec3(1.0 / 2.4)) - 0.055, step(0.0031308, c)); }
+      void main() {
+        vec3 c = toSRGB(clamp(texture2D(tDiffuse, vUv).rgb, 0.0, 1.0));
+        float l = dot(c, vec3(0.2126, 0.7152, 0.0722));
+        c = mix(vec3(l), c, saturation);
+        c = (c - 0.5) * contrast + 0.5;
+        vec2 d = vUv - 0.5;
+        c *= 1.0 - vignette * dot(d, d) * 1.5;
+        gl_FragColor = vec4(c, 1.0);
+      }`,
+  };
+  let composer = null, usePost = false;
+  function setupComposer() {
+    const sz = renderer.getDrawingBufferSize(new THREE.Vector2());
+    const rt = new THREE.WebGLRenderTarget(sz.x, sz.y, { type: THREE.HalfFloatType, samples: renderer.capabilities.isWebGL2 ? 4 : 0 });
+    composer = new THREE.EffectComposer(renderer, rt);
+    composer.addPass(new THREE.RenderPass(scene, camera));
+    composer.addPass(new THREE.UnrealBloomPass(new THREE.Vector2(sz.x, sz.y), 0.5, 0.5, 0.86));
+    composer.addPass(new THREE.ShaderPass(GradeShader));
+  }
+  const QUALITY = { high: { pr: 1.5, shadow: 2048, post: true }, low: { pr: 1, shadow: 1024, post: false } };
+  function applyQuality() {
+    const q = QUALITY[save.quality === 'low' ? 'low' : 'high'];
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, q.pr));
+    if (sun.shadow.mapSize.x !== q.shadow) {
+      sun.shadow.mapSize.set(q.shadow, q.shadow);
+      if (sun.shadow.map) {
+        sun.shadow.map.dispose();
+        sun.shadow.map = null;
+      }
+    }
+    usePost = q.post;
+    if (usePost && !composer) setupComposer();
+    if (composer) composer.setPixelRatio(renderer.getPixelRatio());
+    resize();
   }
 
   W.init(scene);
@@ -87,10 +178,30 @@
   if (!RD.models.RUNNERS[save.character]) save.character = 'friend';
   const P = new RD.Player(scene, save.character);
 
-  const chaser = RD.models.makeChaser();
-  chaser.root.scale.setScalar(0.78);
-  scene.add(chaser.root);
-  const ch = { x: 0, y: 0, z: 20, siren: 0 };
+  // the chaser: a police officer
+  const copRig = RD.models.makeCop();
+  scene.add(copRig.root, copRig.blob);
+  const cop = new RD.Humanoid(copRig);
+  const ch = { x: 2, y: 0, z: 3, whistleT: 0, face: 0, prevX: 2 };
+
+  // speed lines
+  const STREAKS = 44;
+  const streakMat = new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0, blending: THREE.AdditiveBlending, depthWrite: false, fog: false });
+  const streakMesh = new THREE.InstancedMesh(new THREE.BoxGeometry(0.02, 0.02, 2.8), streakMat, STREAKS);
+  streakMesh.frustumCulled = false;
+  scene.add(streakMesh);
+  const streaks = [];
+  function respawnStreak(st, far) {
+    const a = Math.random() * Math.PI * 2, r = 2.4 + Math.random() * 3.5;
+    st.x = Math.cos(a) * r;
+    st.y = Math.sin(a) * r * 0.7 + 1;
+    st.z = far ? -45 - Math.random() * 10 : -Math.random() * 55;
+  }
+  for (let i = 0; i < STREAKS; i++) {
+    const st = {};
+    respawnStreak(st, false);
+    streaks.push(st);
+  }
 
   /* ---------- game state ---------- */
   const G = {
@@ -176,6 +287,7 @@
     $('boardsVal').textContent = save.boards;
     $('soundBtn').textContent = save.muted ? 'SOUND: OFF' : 'SOUND: ON';
     $('charName').textContent = RD.models.RUNNERS[save.character].label;
+    $('gfxBtn').textContent = save.quality === 'low' ? 'GRAPHICS: LOW' : 'GRAPHICS: HIGH';
   }
 
   function cycleCharacter(dir) {
@@ -254,6 +366,9 @@
     for (const k in G.power) G.power[k] = 0;
     P.superJump = false;
     save.runs++;
+    perf.t = perf.frames = 0;
+    perf.done = false;
+    setTimeout(blowWhistle, 350);
     persist();
     showScreen(null);
     if (save.runs <= 3) {
@@ -405,6 +520,7 @@
       }
       G.dangerT = 7;
       G.chaseT = 7;
+      blowWhistle();
     },
     onLand() {
       A.land();
@@ -483,83 +599,160 @@
     updateCamera(dt);
     for (const c of clouds) {
       c.position.x += dt * 1.5;
-      if (c.position.x > 240) c.position.x = -240;
+      if (c.position.x > 260) c.position.x = -260;
+    }
+    // footstep dust and jetpack smoke
+    if (G.state === 'playing') {
+      G.fxT = (G.fxT || 0) - dt;
+      if (G.fxT <= 0) {
+        if (P.jet) {
+          G.fxT = 0.07;
+          for (const s of [-0.13, 0.13]) W.burst(P.x + s, P.y + 0.75, 0.55, { count: 1, speed: 0.4, dust: true, life: 0.4, size: 0.2 });
+        } else if (P.grounded && P.rollT <= 0 && !P.board) {
+          G.fxT = 0.16;
+          W.burst(P.x + (Math.random() - 0.5) * 0.3, P.y + 0.18, 0.35, { count: 1, speed: 0.5, dust: true, life: 0.45, size: 0.22 });
+        } else G.fxT = 0.05;
+      }
     }
   }
 
   /* ---------- chaser ---------- */
   function updateChaser(dt) {
-    let tz = 16, tx = P.x + (P.lane === 2 ? -1 : 1) * 1.0, ty = P.groundY, face = 0;
-    if (G.state === 'playing' && G.chaseT > 0 && !P.jet) tz = 3.2;
+    let tz = 18, tx = P.x + (P.lane === 2 ? -1.1 : 1.1), ty = P.groundY, face = 0, state = 'run', speed = G.speed;
+    if (G.state === 'playing' && G.chaseT > 0 && !P.jet) tz = 3.4;
     if (G.state === 'dying' || G.state === 'over') {
-      tz = 1.2;
-      tx = P.x + (P.x > 0 ? -1.3 : 1.3);
-      face = Math.PI * 0.75 * (P.x > 0 ? -1 : 1);
+      tz = 0.9;
+      tx = P.x + (P.x > 0 ? -1.0 : 1.0);
+      face = (P.x > 0 ? -1 : 1) * Math.PI * 0.75;
+      state = G.state === 'over' || G.dieT > 0.8 ? 'grab' : 'catch';
+      speed = 12;
     }
-    if (G.state === 'menu') tz = 30;
-    const k = Math.min(1, dt * (tz < ch.z ? 3 : 1.4));
+    if (G.state === 'menu') {
+      tz = 2.6;
+      tx = P.x - 2.0;
+      ty = 0;
+      face = -0.45;
+      state = 'cross';
+    }
+    if (G.state === 'paused') return;
+    const snap = G.state === 'menu' && ch.z > 12;
+    const k = snap ? 1 : Math.min(1, dt * (tz < ch.z ? 3 : 1.4));
     ch.z += (tz - ch.z) * k;
-    ch.x += (tx - ch.x) * Math.min(1, dt * 5);
+    ch.x += (tx - ch.x) * (snap ? 1 : Math.min(1, dt * 5));
     ch.y += (ty - ch.y) * Math.min(1, dt * 4);
-    const r = chaser.root;
-    r.visible = ch.z < 14;
-    r.position.set(ch.x, ch.y + 0.35 + Math.sin(G.time * 5) * 0.08, ch.z);
-    r.rotation.y += (face - r.rotation.y) * Math.min(1, dt * 4);
-    ch.siren += dt;
-    const red = Math.floor(ch.siren * 5) % 2 === 0;
-    chaser.sirenMat.color.setHex(red ? 0xff2233 : 0x2266ff);
-    chaser.sirenGlow.material.color.setHex(red ? 0xff2233 : 0x2266ff);
-    chaser.armL.rotation.x = Math.sin(G.time * 9) * 0.7 - 0.3;
-    chaser.armR.rotation.x = -Math.sin(G.time * 9) * 0.7 - 0.3;
-    if (G.state === 'dying' || G.state === 'over') {
-      chaser.armL.rotation.z = -0.4;
-      chaser.armR.rotation.x = -2.2;
-    }
-    chaser.flame.scale.set(0.8 + Math.random() * 0.2, 1 + Math.random() * 0.3, 1);
+    const r = copRig.root;
+    r.visible = ch.z < 16;
+    copRig.blob.visible = r.visible;
+    r.position.set(ch.x, ch.y + C.FOOT_Y, ch.z);
+    let dr = face - r.rotation.y;
+    dr = Math.atan2(Math.sin(dr), Math.cos(dr));
+    r.rotation.y += dr * Math.min(1, dt * 5);
+    ch.whistleT = Math.max(0, ch.whistleT - dt);
+    const laneVel = dt > 0 ? (ch.x - ch.prevX) / dt : 0;
+    ch.prevX = ch.x;
+    if (state === 'run' && G.state !== 'playing') state = 'cross';
+    cop.update(dt, {
+      state, speed: Math.max(speed, 12), time: G.time, spin: -1, laneVel, vy: 0,
+      whistle: ch.whistleT > 0 ? Math.min(1, ch.whistleT) : 0, stumble: 0, bump: 0, landed: false,
+    });
+    copRig.blob.position.set(ch.x, ch.y + C.FOOT_Y + 0.03, ch.z);
+  }
+
+  function blowWhistle() {
+    ch.whistleT = 1.3;
+    A.whistle();
   }
 
   /* ---------- camera ---------- */
-  const tmpPos = new THREE.Vector3(), tmpLook = new THREE.Vector3();
+  const tmpPos = new THREE.Vector3(), tmpLook = new THREE.Vector3(), behind = new THREE.Vector3(), lookB = new THREE.Vector3();
+  const camS = { px: { x: 0, v: 0 }, py: { x: 2, v: 0 }, pz: { x: -5, v: 0 }, lx: { x: 0, v: 0 }, ly: { x: 1.2, v: 0 }, lz: { x: 0, v: 0 }, fov: { x: 62, v: 0 }, roll: { x: 0, v: 0 } };
+  let camPrevX = 0;
   function updateCamera(dt) {
     const wide = camera.aspect > 1.1;
+    const spring = RD.spring;
+    let fovT = wide ? 60 : 72;
     if (G.state === 'menu') {
-      tmpPos.set(P.x - 1.3 + Math.sin(G.time * 0.25) * 0.5, 1.85, -4.7);
-      tmpLook.set(P.x + (wide ? 1.35 : 0), 1.25, 0);
+      tmpPos.set(P.x - 1.3 + Math.sin(G.time * 0.25) * 0.5, 1.9, -4.8);
+      tmpLook.set(P.x + (wide ? 1.35 : 0), 1.3, 0);
       cam.pos.lerp(tmpPos, Math.min(1, dt * 3));
       cam.look.lerp(tmpLook, Math.min(1, dt * 3));
+      for (const [k, v] of [['px', cam.pos.x], ['py', cam.pos.y], ['pz', cam.pos.z], ['lx', cam.look.x], ['ly', cam.look.y], ['lz', cam.look.z]]) {
+        camS[k].x = v;
+        camS[k].v = 0;
+      }
     } else {
       let target;
       if (P.jet) target = P.y;
       else if (P.grounded || !P.alive) target = P.y;
       else target = Math.min(G.camY, P.y);
       G.camY += (target - G.camY) * Math.min(1, dt * (P.jet ? 2 : 4));
-      const behind = new THREE.Vector3(P.x * 0.75, G.camY + (P.jet ? 3.8 : 4.4), P.jet ? 8.2 : 7.3);
-      const lookB = new THREE.Vector3(P.x * 0.85, G.camY + 1.2, -8);
+      behind.set(P.x * 0.72, G.camY + (P.jet ? 3.8 : 4.3), P.jet ? 8.2 : 7.2);
+      lookB.set(P.x * 0.85, G.camY + 1.25, -8);
+      if (G.state === 'dying' || G.state === 'over') {
+        // move in to watch the officer make the catch
+        const k = Math.min(1, (G.state === 'over' ? 2 : G.dieT) / 1.2);
+        const side = P.x > 0 ? -1 : 1;
+        behind.lerp(tmpPos.set(P.x + side * 0.6, G.camY + 2.5, 4.3), k);
+        lookB.lerp(tmpLook.set(P.x + side * 0.4, G.camY + 0.9, -0.2), k);
+      }
       if (G.introT < 1) {
         // swoop from the front view around to behind the runner
         const e = G.introT * G.introT * (3 - 2 * G.introT);
         const ang = Math.PI * (1 - e);
-        const R = 4.7 + (7.3 - 4.7) * e;
-        tmpPos.set(P.x + Math.sin(ang) * R * 0.9, 1.85 + (behind.y - 1.85) * e, Math.cos(ang) * R);
-        tmpLook.set(P.x, 1.25, 0).lerp(lookB, e);
+        const R = 4.8 + (7.2 - 4.8) * e;
+        tmpPos.set(P.x + Math.sin(ang) * R * 0.9, 1.9 + (behind.y - 1.9) * e, Math.cos(ang) * R);
+        tmpLook.set(P.x, 1.3, 0).lerp(lookB, e);
         cam.pos.copy(tmpPos);
         cam.look.copy(tmpLook);
+        for (const [k, v] of [['px', tmpPos.x], ['py', tmpPos.y], ['pz', tmpPos.z], ['lx', tmpLook.x], ['ly', tmpLook.y], ['lz', tmpLook.z]]) {
+          camS[k].x = v;
+          camS[k].v = 0;
+        }
       } else {
-        const k = Math.min(1, dt * 7);
-        cam.pos.lerp(behind, k);
-        cam.look.lerp(lookB, k);
+        cam.pos.set(spring(camS.px, behind.x, 9, dt), spring(camS.py, behind.y, 7, dt), spring(camS.pz, behind.z, 7, dt));
+        cam.look.set(spring(camS.lx, lookB.x, 11, dt), spring(camS.ly, lookB.y, 8, dt), spring(camS.lz, lookB.z, 8, dt));
       }
+      if (G.state === 'playing') fovT += Math.max(0, G.speed - 14) * 0.38 + (P.jet ? 4 : 0);
     }
     camera.position.copy(cam.pos);
     if (G.shake > 0) {
       G.shake = Math.max(0, G.shake - dt * 1.6);
-      const s = G.shake * 0.35;
-      camera.position.x += (Math.random() - 0.5) * s;
-      camera.position.y += (Math.random() - 0.5) * s;
+      const s = G.shake * 0.3, t = G.time;
+      camera.position.x += (Math.sin(t * 47) * 0.6 + Math.sin(t * 71 + 1.3) * 0.4) * s;
+      camera.position.y += (Math.sin(t * 53 + 2.1) * 0.6 + Math.sin(t * 89 + 0.7) * 0.4) * s;
     }
     camera.lookAt(cam.look);
-    sun.position.set(P.x + 10, 24, 10);
-    sun.target.position.set(P.x, 0, -14);
+    const laneVel = dt > 0 ? (P.x - camPrevX) / dt : 0;
+    camPrevX = P.x;
+    const roll = spring(camS.roll, G.state === 'playing' ? -laneVel * 0.004 : 0, 8, dt);
+    camera.rotateZ(roll);
+    const fov = spring(camS.fov, fovT, 4, dt);
+    if (Math.abs(camera.fov - fov) > 0.01) {
+      camera.fov = fov;
+      camera.updateProjectionMatrix();
+    }
+    sky.position.copy(camera.position);
+    sun.position.set(P.x + SUN_DIR.x * 40, SUN_DIR.y * 40, SUN_DIR.z * 40 - 6);
+    sun.target.position.set(P.x, 0, -6);
+
+    // speed lines
+    const want = G.state === 'playing' ? Math.min(1, Math.max(0, (G.speed - 19) / 10)) * 0.32 + (P.jet ? 0.3 : 0) : 0;
+    streakMat.opacity += (want - streakMat.opacity) * Math.min(1, dt * 3);
+    streakMesh.visible = streakMat.opacity > 0.01;
+    if (streakMesh.visible) {
+      const d = W._dummy, v = (G.speed + 25) * dt;
+      for (let i = 0; i < STREAKS; i++) {
+        const st = streaks[i];
+        st.z += v;
+        if (st.z > 4) respawnStreak(st, true);
+        d.position.set(camera.position.x + st.x, camera.position.y + st.y - 2, camera.position.z + st.z);
+        d.rotation.set(0, 0, 0);
+        d.scale.set(1, 1, 1);
+        d.updateMatrix();
+        streakMesh.setMatrixAt(i, d.matrix);
+      }
+      streakMesh.instanceMatrix.needsUpdate = true;
+    }
   }
 
   /* ---------- input ---------- */
@@ -656,6 +849,13 @@
     showScreen(G.state === 'over' ? 'over' : 'menu');
   });
   onClick('soundBtn', toggleSound);
+  onClick('gfxBtn', () => {
+    save.quality = save.quality === 'low' ? 'high' : 'low';
+    save.qualityLocked = true;
+    persist();
+    applyQuality();
+    refreshMenu();
+  });
   onClick('charPrev', () => cycleCharacter(-1));
   onClick('charNext', () => cycleCharacter(1));
   onClick('muteBtn', toggleSound);
@@ -687,28 +887,49 @@
   function resize() {
     const w = window.innerWidth, h = window.innerHeight;
     renderer.setSize(w, h, false);
+    if (composer) composer.setSize(w, h);
     camera.aspect = w / h;
-    camera.fov = w / h < 0.8 ? 72 : 62;
     camera.updateProjectionMatrix();
   }
   window.addEventListener('resize', resize);
-  resize();
+  applyQuality();
 
   A.muted = save.muted;
   $('muteBtn').textContent = save.muted ? '🔇' : '🔊';
   toMenu();
 
+  // if the first seconds of a run are choppy, drop to LOW graphics once
+  const perf = { t: 0, frames: 0, done: false };
+  function watchPerformance(rawDt) {
+    if (perf.done || G.state !== 'playing' || save.qualityLocked || save.quality === 'low') return;
+    perf.t += rawDt;
+    perf.frames++;
+    if (perf.t > 5) {
+      perf.done = true;
+      if (perf.frames / perf.t < 40) {
+        save.quality = 'low';
+        persist();
+        applyQuality();
+        refreshMenu();
+        toast('Graphics set to LOW for smoother play', 2.2);
+      }
+    }
+  }
+
   let last = performance.now();
   function frame(now) {
     requestAnimationFrame(frame);
-    const dt = Math.min(0.05, Math.max(0, (now - last) / 1000));
+    const raw = Math.max(0, (now - last) / 1000);
+    const dt = Math.min(0.05, raw);
     last = now;
     if (G.state !== 'paused') frameUpdate(dt);
-    renderer.render(scene, camera);
+    watchPerformance(raw);
+    if (usePost) composer.render(dt);
+    else renderer.render(scene, camera);
   }
   requestAnimationFrame(frame);
   $('loading').classList.add('hidden');
 
   // handy for debugging from the browser console
-  RD.game = { G, P, W, save, startRun, act, toMenu, collectPower, useBoard, frameUpdate, renderer, scene, camera, pause, buildShop, showScreen };
+  RD.game = { G, P, W, save, startRun, act, toMenu, collectPower, useBoard, frameUpdate, renderer, scene, camera, pause, buildShop, showScreen, cop, ch, applyQuality };
 })();

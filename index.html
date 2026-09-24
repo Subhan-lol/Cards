@@ -43,7 +43,7 @@
       <!-- main menu -->
       <div id="menu" class="screen side">
         <div class="logo"><span class="l1">RAIL</span><span class="l2">DASH</span></div>
-        <p class="tagline">Dodge the trains, grab the coins, outrun the patrol bot!</p>
+        <p class="tagline">Dodge the trains, grab the coins, and don't let the cop catch you!</p>
         <div class="char-pick">
           <button id="charPrev" class="btn grey arrow" title="Previous character (←)">◀</button>
           <div><small>RUNNER</small><b id="charName">FRIEND</b></div>
@@ -53,6 +53,7 @@
         <div class="row">
           <button id="shopBtn" class="btn blue">SHOP</button>
           <button id="soundBtn" class="btn grey">SOUND: ON</button>
+          <button id="gfxBtn" class="btn grey">GRAPHICS: HIGH</button>
         </div>
         <div class="stats">
           <div><small>BEST</small><b id="bestVal">0</b></div>
@@ -107,10 +108,11 @@
       <div id="loading">Loading…</div>
     </div>
 
-    <script src="js/vendor/three.min.js"></script>
+    <script src="js/vendor/three.bundle.js"></script>
     <script src="js/textures.js"></script>
-    <script src="js/friend-face.js"></script>
+    <script src="js/faces.js"></script>
     <script src="js/models.js"></script>
+    <script src="js/anim.js"></script>
     <script src="js/world.js"></script>
     <script src="js/player.js"></script>
     <script src="js/audio.js"></script>
