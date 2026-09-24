@@ -12,16 +12,23 @@ Scroll Instagram Reels, YouTube Shorts and TikTok on Windows without touching an
 
 Everything runs on your PC. The camera video is never saved or uploaded.
 
-## Setup (one time)
+## Install
 
-1. Install **Python 3.10 or newer (64-bit)** from [python.org](https://www.python.org/downloads/). In the installer, tick **"Add python.exe to PATH"**.
-   Or open a terminal and run `winget install Python.Python.3.12`.
-2. Download this `reel-scroller` folder.
-3. Double-click **`setup.bat`**. It creates a private Python environment in `.venv`, installs the packages and downloads the hand-tracking model (about 8 MB).
+1. On GitHub, click **Code → Download ZIP**, extract it, and open the `reel-scroller` folder.
+2. Double-click **`start.bat`**. If Windows shows "Windows protected your PC", click **More info → Run anyway**.
+
+That's it. The first time, `start.bat` sets everything up by itself, which takes a few minutes:
+
+- **Python**: if you don't have 64-bit Python 3.10 or newer, it downloads the official Python 3.12 installer from python.org, checks that it's signed by the Python Software Foundation, and installs it for your user account. No admin rights are needed. If that download fails, it tries `winget` instead.
+- **Packages**: installed into a private `.venv` folder inside `reel-scroller`, so nothing else on your PC is affected.
+- **Hand-tracking model**: about 8 MB, downloaded once.
+- **Desktop shortcut**: a "Reel Scroller" shortcut on your desktop.
+
+After that, it starts in a few seconds.
 
 ## Use it
 
-1. Double-click **`start.bat`**. A small preview window opens in the bottom-right corner of your screen and stays on top.
+1. Double-click **`start.bat`** or the desktop shortcut. A small preview window opens in the bottom-right corner of your screen and stays on top.
 2. Open your reels in the browser (instagram.com/reels, youtube.com/shorts, tiktok.com) and **leave the mouse pointer over the video**.
 3. Sit about an arm's length from the webcam. Raise your hand with your index finger pointing up and your palm facing the camera.
 
@@ -86,7 +93,8 @@ Add options after `start.bat` in a terminal (for example `start.bat --invert`). 
 - **"Could not open camera"**: close other apps using the webcam (Zoom, Teams, the Camera app), or try `--camera 1`. Also check that **Settings → Privacy & security → Camera → Let desktop apps access your camera** is on.
 - **The reel doesn't change**: move the mouse pointer over the video. If the site ignores the scroll wheel, try `--mode keys` and click the page once.
 - **Nothing happens in some apps**: Windows blocks simulated input to apps running as administrator.
-- **Setup fails on `mediapipe`**: make sure your Python is 64-bit. Run `py -3 -c "import struct; print(struct.calcsize('P')*8)"`, which should print `64`.
+- **Python won't install** (for example, a work PC that blocks installers): install Python 3.12 yourself from [python.org](https://www.python.org/downloads/), tick "Add python.exe to PATH", then run `start.bat` again.
+- **Setup stopped halfway**: run `start.bat` again. It picks up where it left off. To start completely fresh, delete the `.venv` folder first.
 
 ## How it works
 
